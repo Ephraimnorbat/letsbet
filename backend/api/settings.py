@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     'drf_spectacular',
+    'django_celery_beat',
     
     
     # Local apps
@@ -215,3 +216,18 @@ else:
 #         }
 #     }
 # }
+
+
+
+
+#celery configs
+
+
+# Tell Celery to use Redis on the default port 6379
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+
+# Optional but recommended: store task results in Redis too
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# Standard Django-Celery-Beat setting
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

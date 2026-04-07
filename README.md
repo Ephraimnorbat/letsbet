@@ -37,3 +37,11 @@ A modern sports betting platform frontend built with Next.js, TypeScript, and Ta
 ```bash
 git clone <your-repo-url>
 cd letsbet/frontend
+
+
+celery
+.\venv\Scripts\activate
+celery -A api worker -l info -P eventlet
+
+.\venv\Scripts\activate
+celery -A api beat -l info

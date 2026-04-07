@@ -5,6 +5,21 @@ import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 
+interface Currency {
+  id: number;
+  code: string;
+  name: string;
+  symbol: string;
+  exchange_rate_to_kES: number;
+}
+
+interface Country {
+  id: number;
+  code: string;
+  name: string;
+  phone_code: string;
+}
+
 interface User {
   id: number;
   username: string;
@@ -14,17 +29,24 @@ interface User {
   total_bets: number;
   total_wins: number;
   total_profit: number;
+  country?: Country;
+  preferred_currency?: Currency;
+  country_name?: string;
+  currency_code?: string;
+  currency_symbol?: string;
 }
 
 interface AuthState {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string, loginType?: 'email' | 'phone') => Promise<void>;
   register: (userData: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
+  updatePreferences: (countryId: number, currencyId?: number) => Promise<void>;
   checkAuth: () => Promise<boolean>;
+  refreshExchangeRates: () => Promise<void>;
 }
 
 interface RegisterData {
@@ -33,6 +55,8 @@ interface RegisterData {
   password: string;
   confirm_password: string;
   phone_number?: string;
+  country_id: number;
+  preferred_currency_id?: number;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -42,21 +66,29 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isLoading: false,
 
-      login: async (email: string, password: string) => {
+      login: async (identifier: string, password: string, loginType: 'email' | 'phone' = 'email') => {
         set({ isLoading: true });
         try {
-          // Django REST Framework token auth endpoint
-          const response = await apiClient.post('/auth/login/', { email, password });
+          const loginData = loginType === 'email' 
+            ? { email: identifier, password }
+            : { phone: identifier, password };
+            
+          const response = await apiClient.post(API_ENDPOINTS.auth.login, loginData);
           
-          const { token, user } = response.data;
+          // Ensure response has the expected structure
+          const { token, user } = response;
+          
+          if (!user || !token) {
+            throw new Error('Invalid response from server');
+          }
           
           localStorage.setItem('auth_token', token);
           set({ user, token, isLoading: false });
           
-          toast.success('Login successful!');
+          toast.success(`Welcome back, ${user.username || user.email || 'User'}!`);
         } catch (error: any) {
           set({ isLoading: false });
-          const message = error.response?.data?.error || 'Login failed. Please try again.';
+          const message = error.response?.data?.error || error.response?.data?.message || 'Login failed. Please try again.';
           toast.error(message);
           throw error;
         }
@@ -67,18 +99,26 @@ export const useAuthStore = create<AuthState>()(
         try {
           const response = await apiClient.post(API_ENDPOINTS.auth.register, userData);
           
-          const { token, user } = response.data;
+          const { token, user } = response;
+          
+          if (!user || !token) {
+            throw new Error('Invalid response from server');
+          }
           
           localStorage.setItem('auth_token', token);
           set({ user, token, isLoading: false });
           
-          toast.success('Registration successful!');
+          toast.success(`Welcome to LetsBet, ${user.username || user.email}! Your account has been created successfully.`);
         } catch (error: any) {
           set({ isLoading: false });
           const errors = error.response?.data;
           if (errors) {
             Object.values(errors).forEach((err: any) => {
-              toast.error(err[0]);
+              if (typeof err === 'string') {
+                toast.error(err);
+              } else if (Array.isArray(err)) {
+                err.forEach(e => toast.error(e));
+              }
             });
           } else {
             toast.error('Registration failed. Please try again.');
@@ -101,12 +141,37 @@ export const useAuthStore = create<AuthState>()(
       },
 
       updateProfile: async (data: Partial<User>) => {
+        set({ isLoading: true });
         try {
-          const response = await apiClient.put(API_ENDPOINTS.user.updateProfile, data);
-          set({ user: response.data.user });
+          const response = await apiClient.put(API_ENDPOINTS.auth.updateProfile, data);
+          set({ user: response.user, isLoading: false });
           toast.success('Profile updated successfully');
         } catch (error) {
+          set({ isLoading: false });
           toast.error('Failed to update profile');
+          throw error;
+        }
+      },
+
+      updatePreferences: async (countryId: number, currencyId?: number) => {
+        set({ isLoading: true });
+        try {
+          const response = await apiClient.post(API_ENDPOINTS.auth.updatePreferences, {
+            country_id: countryId,
+            currency_id: currencyId
+          });
+          
+          set({ 
+            user: { ...get().user, ...response },
+            isLoading: false 
+          });
+          
+          toast.success('Preferences updated successfully');
+          
+          await get().refreshExchangeRates();
+        } catch (error) {
+          set({ isLoading: false });
+          toast.error('Failed to update preferences');
           throw error;
         }
       },
@@ -116,19 +181,54 @@ export const useAuthStore = create<AuthState>()(
         if (!token) return false;
 
         try {
-          const response = await apiClient.get(API_ENDPOINTS.user.profile);
-          set({ user: response.data, token });
+          const response = await apiClient.get(API_ENDPOINTS.auth.profile);
+          if (!response) {
+            throw new Error('No user data received');
+          }
+          set({ user: response, token });
+          
+          if (response.preferred_currency) {
+            await get().refreshExchangeRates();
+          }
+          
           return true;
         } catch (error) {
+          console.error('Auth check failed:', error);
           localStorage.removeItem('auth_token');
           set({ user: null, token: null });
           return false;
         }
       },
+
+      refreshExchangeRates: async () => {
+        try {
+          const response = await apiClient.get(API_ENDPOINTS.currencies.exchangeRates);
+          
+          const { user } = get();
+          if (user?.preferred_currency && response.rates) {
+            const updatedCurrency = {
+              ...user.preferred_currency,
+              exchange_rate_to_kES: response.rates[user.preferred_currency.code] || user.preferred_currency.exchange_rate_to_kES
+            };
+            
+            set({
+              user: {
+                ...user,
+                preferred_currency: updatedCurrency
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Failed to refresh exchange rates:', error);
+        }
+      },
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, token: state.token }),
+      partialize: (state) => ({ 
+        user: state.user, 
+        token: state.token 
+      }),
     }
   )
 );

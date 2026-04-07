@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
     updateProfile: '/auth/profile/update/',
     changePassword: '/auth/change-password/',
     stats: '/auth/stats/',
+    updatePreferences: '/auth/preferences/update/',
   },
   
   // Matches
@@ -38,6 +39,16 @@ export const API_ENDPOINTS = {
     deposit: '/wallet/deposit/',
     withdraw: '/wallet/withdraw/',
     transactions: '/wallet/transactions/',
+  },
+  countries: {
+    list: '/auth/countries/',
+    details: (id: string) => `/auth/countries/${id}/`,
+  },
+  
+  currencies: {
+    list: '/auth/currencies/',
+    exchangeRates: '/auth/exchange-rates/',
+    convert: '/auth/currencies/convert/',
   },
   
   // Leaderboard
