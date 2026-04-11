@@ -1,3 +1,23 @@
+// src/types/matches.ts
+export interface MatchOdds {
+  [teamName: string]: number | string;
+}
+
+export interface Match {
+  match_id: string;
+  home_team: string;
+  away_team: string;
+  commence_time: string;
+  odds: MatchOdds;
+  bookmaker: string | null;
+}
+
+export interface LeagueOddsResponse {
+  league_name: string;
+  last_updated: string;
+  matches: Match[];
+}
+
 export interface Team {
   id: number;
   name: string;

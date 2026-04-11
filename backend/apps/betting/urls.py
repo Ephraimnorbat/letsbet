@@ -13,4 +13,6 @@ urlpatterns = [
     path('history/', views.BetHistoryView.as_view(), name='bet-history'),
     path('cashout/<int:bet_id>/', views.CashoutBetView.as_view(), name='cashout-bet'),
     path('parlay/', views.ParlayBetView.as_view(), name='parlay-bet'),
+    path('matches/upcoming/', views.UpcomingMatchesView.as_view(), name='upcoming-matches'),
+
 ]

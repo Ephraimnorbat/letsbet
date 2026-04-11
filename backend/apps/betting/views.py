@@ -1,11 +1,19 @@
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import F
+from rest_framework.views import APIView
+import requests
+from django.conf import settings
+from django.core.cache import cache
+
+
 from .models import Bet, BetSlip, BetType
 from .serializers import BetSerializer, CreateBetSerializer, BetSlipSerializer, BetTypeSerializer
 from apps.wallet.models import Transaction
+
 
 class BetTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BetType.objects.filter(is_active=True)
@@ -19,19 +27,22 @@ class PlaceBetView(generics.CreateAPIView):
     @transaction.atomic
     def perform_create(self, serializer):
         user = self.request.user
-        
-        # Check if user has sufficient balance
-        if user.wallet.balance < serializer.validated_data['stake']:
+        wallet = user.wallet
+
+        # 🔥 SAFE balance check
+        wallet.refresh_from_db()
+        if wallet.balance < serializer.validated_data['stake']:
             raise serializers.ValidationError("Insufficient balance")
-        
-        # Create the bet
+
+        # Create bet
         bet = serializer.save(user=user)
-        
-        # Deduct from wallet
-        user.wallet.balance -= bet.stake
-        user.wallet.save()
-        
-        # Create transaction record
+
+        # 🔥 SAFE deduction
+        wallet.balance = F('balance') - bet.stake
+        wallet.save()
+        wallet.refresh_from_db()
+
+        # Transaction
         Transaction.objects.create(
             user=user,
             amount=bet.stake,
@@ -39,11 +50,10 @@ class PlaceBetView(generics.CreateAPIView):
             description=f"Bet placed on {bet.match}",
             reference=f"BET_{bet.id}"
         )
-        
-        # Update user stats
+
         user.total_bets += 1
         user.save()
-        
+
         return bet
 
 class MyBetsView(generics.ListAPIView):
@@ -84,8 +94,10 @@ class CashoutBetView(generics.UpdateAPIView):
             bet.save()
             
             # Refund to wallet
-            request.user.wallet.balance += cashout_amount
-            request.user.wallet.save()
+            wallet = request.user.wallet
+            wallet.balance = F('balance') + cashout_amount
+            wallet.save()
+            wallet.refresh_from_db()
             
             # Create transaction record
             Transaction.objects.create(
@@ -122,6 +134,17 @@ class ParlayBetView(generics.CreateAPIView):
         
         potential_win = total_stake * total_odds
         parlay_id = f"PARLAY_{timezone.now().timestamp()}"
+
+        wallet = request.user.wallet
+        wallet.refresh_from_db()
+
+        if wallet.balance < total_stake:
+            return Response({'error': 'Insufficient balance'}, status=400)
+
+        # Deduct first
+        wallet.balance = F('balance') - total_stake
+        wallet.save()
+        wallet.refresh_from_db()
         
         # Create individual bets
         bets = []
@@ -140,8 +163,17 @@ class ParlayBetView(generics.CreateAPIView):
             bets.append(bet)
         
         # Deduct total stake from wallet
-        request.user.wallet.balance -= total_stake
-        request.user.wallet.save()
+        # 🔥 SAFE balance check
+        wallet = request.user.wallet
+        wallet.refresh_from_db()
+
+        if wallet.balance < total_stake:
+            return Response({'error': 'Insufficient balance'}, status=400)
+
+        # Deduct
+        wallet.balance = F('balance') - total_stake
+        wallet.save()
+        wallet.refresh_from_db()
         
         # Create transaction
         Transaction.objects.create(
@@ -159,3 +191,47 @@ class ParlayBetView(generics.CreateAPIView):
             'potential_win': potential_win,
             'bets': BetSerializer(bets, many=True).data
         }, status=status.HTTP_201_CREATED)
+
+
+class UpcomingMatchesView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # 1. Define a unique cache key
+        cache_key = "upcoming_matches_next_10"
+        
+        # 2. Attempt to fetch from Redis
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            # Adding a header or a key to indicate it's from cache is helpful for debugging
+            cached_data["source"] = "cache"
+            return Response(cached_data)
+
+        try:
+            url = "https://v3.football.api-sports.io/fixtures"
+            params = {"next": 10}
+            headers = {"x-apisports-key": settings.SPORTS_API_KEY}
+
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status() # Ensure we don't cache 4xx or 5xx errors
+            
+            data = response.json()
+            
+            result = {
+                "status": "success",
+                "data": data,
+                "source": "api"
+            }
+
+            # 3. Save to Redis for 5 minutes (300 seconds)
+            # Only cache if the API actually returned a successful response
+            if response.status_code == 200:
+                cache.set(cache_key, result, timeout=300)
+
+            return Response(result)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

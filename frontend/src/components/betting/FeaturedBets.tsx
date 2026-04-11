@@ -1,6 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useBettingStore } from '@/store/bettingStore';
+import { useAuthStore } from '@/store/authStore';
 
 const featuredBets = [
   { id: 1, match: 'Manchester United vs Liverpool', odds: 2.5, prediction: 'Home Win' },
@@ -9,6 +11,20 @@ const featuredBets = [
 ];
 
 export default function FeaturedBets() {
+  const { addToBetSlip } = useBettingStore();
+  const { user } = useAuthStore(); // Assuming user profile contains currency info
+  const currencySymbol = user?.currency_symbol || '$';
+
+  const handleQuickBet = (bet: any) => {
+    addToBetSlip({
+      id: `featured-${bet.id}`,
+      matchId: bet.id,
+      matchName: bet.match,
+      selection: bet.prediction,
+      odds: bet.odds,
+    });
+  };
+
   return (
     <div className="container mx-auto px-4 py-12">
       <h2 className="text-2xl font-bold mb-6">Featured Bets</h2>
@@ -19,13 +35,16 @@ export default function FeaturedBets() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow"
+            className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 hover:shadow-xl transition-all"
           >
-            <h3 className="font-semibold text-lg mb-2">{bet.match}</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">{bet.prediction}</p>
+            <h3 className="font-semibold text-lg mb-2 text-white">{bet.match}</h3>
+            <p className="text-gray-400 mb-4">{bet.prediction}</p>
             <div className="flex justify-between items-center">
               <span className="text-2xl font-bold text-green-500">{bet.odds}</span>
-              <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+              <button 
+                onClick={() => handleQuickBet(bet)}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition font-bold"
+              >
                 Bet Now
               </button>
             </div>

@@ -1,4 +1,36 @@
 import axios from 'axios';
+import { apiClient } from './client';
+import { API_ENDPOINTS } from './endpoints';
+import { LeagueOddsResponse } from '@/types/matches';
+
+
+/**
+ * Fetches live betting odds for a specific league from our 
+ * production-ready Django view (with Redis caching).
+ */
+export const fetchLeagueOdds = async (leagueId: number): Promise<LeagueOddsResponse> => {
+  try {
+    // We use the functional endpoint from our constants
+    const response = await apiClient.get(API_ENDPOINTS.matches.externalOdds(leagueId));
+    
+    // Note: Since your apiClient response interceptor returns response.data,
+    // we return the result directly.
+    return response as unknown as LeagueOddsResponse;
+  } catch (error) {
+    // Errors are already toasted by your interceptor, but we throw for local handling
+    console.error(`Error fetching odds for league ${leagueId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches all available leagues/sports to populate sidebars or selectors
+ */
+export const fetchAvailableLeagues = async () => {
+  const response = await apiClient.get(API_ENDPOINTS.matches.leagues);
+  return response;
+};
+
 
 export class LiveMatchesService {
   private static instance: LiveMatchesService;

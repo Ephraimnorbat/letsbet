@@ -17,43 +17,28 @@ class CountrySerializer(serializers.ModelSerializer):
         model = Country
         fields = ['id', 'code', 'name', 'phone_code', 'flag', 'default_currency', 'default_currency_details']
 
-# Update your existing UserSerializer
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ['currency_symbol', 'exchange_rate', 'country'] # Explicitly include these
+        read_only_fields = ['user', 'created_at', 'updated_at']
+
 class UserSerializer(serializers.ModelSerializer):
-    country_name = serializers.CharField(source='country.name', read_only=True)
-    country_code = serializers.CharField(source='country.code', read_only=True)
-    currency_code = serializers.CharField(source='preferred_currency.code', read_only=True)
-    currency_symbol = serializers.CharField(source='preferred_currency.symbol', read_only=True)
+    # Nest the profile data so the frontend 'User' interface is satisfied
+    profile = UserProfileSerializer(read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'phone_number', 'date_of_birth',
-                 'profile_picture', 'is_verified', 'total_bets', 'total_wins',
-                 'total_losses', 'total_profit', 'date_joined',
-                 'country', 'country_name', 'country_code',
-                 'preferred_currency', 'currency_code', 'currency_symbol']
-        read_only_fields = ['id', 'is_verified', 'total_bets', 'total_wins',
-                           'total_losses', 'total_profit', 'date_joined']
+        fields = ['id', 'username', 'email', 'profile']
 
-# Keep your existing LoginSerializer
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True)
 
     def validate(self, data):
-        email = data.get('email')
-        password = data.get('password')
-        
-        if not email or not password:
+        if not data.get('email') or not data.get('password'):
             raise serializers.ValidationError("Email and password are required")
-        
         return data
-
-# Keep your existing UserProfileSerializer
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = '__all__'
-        read_only_fields = ['user', 'created_at', 'updated_at']
 
 # Update UserDetailSerializer
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -84,6 +69,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        if User.objects.filter(email=data['email']).exists():
+            raise serializers.ValidationError({"email": "Email already exists"})
         
         # Validate country if provided
         if 'country_id' in data and data['country_id']:
@@ -117,7 +104,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password')
         
         user = User(**validated_data)
+        user.is_verified = False
         user.set_password(password)
+        user.email = user.email.lower()
         
         if country:
             user.country = country

@@ -34,6 +34,8 @@ interface User {
   country_name?: string;
   currency_code?: string;
   currency_symbol?: string;
+  exchange_rate: number;   
+  balance?: number;
 }
 
 interface AuthState {
@@ -67,51 +69,51 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
 
       login: async (identifier: string, password: string, loginType: 'email' | 'phone' = 'email') => {
-        set({ isLoading: true });
-        try {
-          const loginData = loginType === 'email' 
-            ? { email: identifier, password }
-            : { phone: identifier, password };
-            
-          const response = await apiClient.post(API_ENDPOINTS.auth.login, loginData);
-          
-          // Ensure response has the expected structure
-          const { token, user } = response;
-          
-          if (!user || !token) {
-            throw new Error('Invalid response from server');
-          }
-          
-          localStorage.setItem('auth_token', token);
-          set({ user, token, isLoading: false });
-          
-          toast.success(`Welcome back, ${user.username || user.email || 'User'}!`);
-        } catch (error: any) {
-          set({ isLoading: false });
-          const message = error.response?.data?.error || error.response?.data?.message || 'Login failed. Please try again.';
-          toast.error(message);
-          throw error;
-        }
-      },
+              set({ isLoading: true });
+              try {
+                const loginData = loginType === 'email' 
+                  ? { email: identifier, password }
+                  : { phone: identifier, password };
+                  
+                const response = await apiClient.post(API_ENDPOINTS.auth.login, loginData);
+                
+                // JWT usually returns 'access' and 'refresh'
+                const { token, refresh, user } = response;
+                
+                if (!user || !token) { // Check for 'token' here
+                  throw new Error('Invalid response from server');
+                }
+                                // Store both tokens
+              // Store tokens (Update the key names to match what you extracted)
+              localStorage.setItem('access_token', token); 
+              if (refresh) localStorage.setItem('refresh_token', refresh);
+
+              set({ user, token: token, isLoading: false });
+                
+                toast.success(`Welcome back, ${user.username || 'User'}!`);
+              } catch (error: any) {
+                set({ isLoading: false });
+                const message = error.response?.data?.detail || error.response?.data?.error || 'Login failed.';
+                toast.error(message);
+                throw error;
+              }
+            },
 
       register: async (userData: RegisterData) => {
         set({ isLoading: true });
+
         try {
-          const response = await apiClient.post(API_ENDPOINTS.auth.register, userData);
-          
-          const { token, user } = response;
-          
-          if (!user || !token) {
-            throw new Error('Invalid response from server');
-          }
-          
-          localStorage.setItem('auth_token', token);
-          set({ user, token, isLoading: false });
-          
-          toast.success(`Welcome to LetsBet, ${user.username || user.email}! Your account has been created successfully.`);
+          await apiClient.post(API_ENDPOINTS.auth.register, userData);
+
+          set({ isLoading: false });
+
+          toast.success('Account created! Please check your email to verify your account.');
+
         } catch (error: any) {
           set({ isLoading: false });
+
           const errors = error.response?.data;
+
           if (errors) {
             Object.values(errors).forEach((err: any) => {
               if (typeof err === 'string') {
@@ -123,22 +125,27 @@ export const useAuthStore = create<AuthState>()(
           } else {
             toast.error('Registration failed. Please try again.');
           }
+
           throw error;
         }
       },
 
       logout: async () => {
-        try {
-          await apiClient.post(API_ENDPOINTS.auth.logout);
-        } catch (error) {
-          console.error('Logout error:', error);
-        } finally {
-          localStorage.removeItem('auth_token');
-          set({ user: null, token: null });
-          toast.success('Logged out successfully');
-          window.location.href = '/';
-        }
-      },
+              try {
+                // Attempt to notify backend (standard practice for JWT blacklist)
+                const refresh = localStorage.getItem('refresh_token');
+                await apiClient.post(API_ENDPOINTS.auth.logout, { refresh });
+              } catch (error) {
+                console.error('Logout error:', error);
+              } finally {
+                // Always clear local state even if API call fails
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                set({ user: null, token: null });
+                toast.success('Logged out successfully');
+                window.location.href = '/auth'; // Redirect to your unified auth page
+              }
+            },
 
       updateProfile: async (data: Partial<User>) => {
         set({ isLoading: true });
@@ -177,28 +184,25 @@ export const useAuthStore = create<AuthState>()(
       },
 
       checkAuth: async () => {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return false;
+              const token = localStorage.getItem('access_token');
+              if (!token) return false;
 
-        try {
-          const response = await apiClient.get(API_ENDPOINTS.auth.profile);
-          if (!response) {
-            throw new Error('No user data received');
-          }
-          set({ user: response, token });
-          
-          if (response.preferred_currency) {
-            await get().refreshExchangeRates();
-          }
-          
-          return true;
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          localStorage.removeItem('auth_token');
-          set({ user: null, token: null });
-          return false;
-        }
-      },
+              try {
+                // This call will trigger the refresh interceptor in client.ts 
+                // if the access_token is expired but refresh_token is valid.
+                const response = await apiClient.get(API_ENDPOINTS.auth.profile);
+                
+                set({
+                  user: response,
+                  token: localStorage.getItem('access_token') // Get potentially refreshed token
+                });
+                
+                return true;
+              } catch (error) {
+                // Interceptor handles the cleanup/redirect, so we just return false
+                return false;
+              }
+            },
 
       refreshExchangeRates: async () => {
         try {

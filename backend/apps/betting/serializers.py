@@ -22,13 +22,20 @@ class CreateBetSerializer(serializers.ModelSerializer):
         fields = ['match', 'bet_type', 'selection', 'odds', 'stake']
 
     def validate(self, data):
-        # Check if match is still active for betting
-        if data['match'].status not in ['scheduled', 'live']:
-            raise serializers.ValidationError("Match is not available for betting")
-        
-        # Calculate potential win
-        data['potential_win'] = data['stake'] * data['odds']
-        
+        match = data['match']
+
+        # Fetch real odds from DB or API
+        real_odds = match.get_current_odds(data['selection'])
+
+        if data['stake'] <= 0:
+            raise serializers.ValidationError("Stake must be greater than 0")
+
+        if float(data['odds']) != float(real_odds):
+            raise serializers.ValidationError("Odds have changed")
+
+        data['odds'] = real_odds
+        data['potential_win'] = data['stake'] * real_odds
+
         return data
 
 class BetSlipSerializer(serializers.ModelSerializer):

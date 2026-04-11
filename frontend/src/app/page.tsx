@@ -24,7 +24,7 @@ export default function Home() {
               transition={{ delay: 0.2 }}
               className="text-4xl md:text-5xl font-bold mb-4"
             >
-              Welcome to LETSBET
+              Welcome to Unibet 360
             </motion.h1>
             <motion.p
               initial={{ y: 20, opacity: 0 }}

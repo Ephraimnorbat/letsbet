@@ -1,45 +1,17 @@
 export const API_ENDPOINTS = {
-  // Authentication
+  // Authentication endpoints
   auth: {
     login: '/auth/login/',
     register: '/auth/register/',
+    refresh: '/auth/token/refresh/',
     logout: '/auth/logout/',
     profile: '/auth/profile/',
     updateProfile: '/auth/profile/update/',
     changePassword: '/auth/change-password/',
-    stats: '/auth/stats/',
     updatePreferences: '/auth/preferences/update/',
   },
   
-  // Matches
-  matches: {
-    live: '/matches/live/',
-    upcoming: '/matches/upcoming/',
-    completed: '/matches/completed/',
-    details: (id: string | number) => `/matches/${id}/`,
-    sports: '/matches/sports/',
-    leagues: '/matches/leagues/',
-    teams: '/matches/teams/',
-  },
-  
-  // Betting
-  betting: {
-    placeBet: '/betting/place/',
-    parlay: '/betting/parlay/',
-    myBets: '/betting/my-bets/',
-    pendingBets: '/betting/pending/',
-    history: '/betting/history/',
-    cashout: (betId: number) => `/betting/cashout/${betId}/`,
-    betTypes: '/betting/bet-types/',
-  },
-  
-  // Wallet
-  wallet: {
-    balance: '/wallet/balance/',
-    deposit: '/wallet/deposit/',
-    withdraw: '/wallet/withdraw/',
-    transactions: '/wallet/transactions/',
-  },
+  // Country and Currency endpoints
   countries: {
     list: '/auth/countries/',
     details: (id: string) => `/auth/countries/${id}/`,
@@ -51,8 +23,47 @@ export const API_ENDPOINTS = {
     convert: '/auth/currencies/convert/',
   },
   
-  // Leaderboard
+  // Match endpoints - UPDATED with all properties
+  matches: {
+    externalOdds: (leagueId: string | number) => `/matches/external/odds/${leagueId}/`,
+    live: '/matches/live/',
+    upcoming: '/matches/upcoming/',
+    completed: '/matches/completed/',
+    details: (id: string | number) => `/matches/${id}/`,
+    stats: (id: string | number) => `/matches/${id}/stats/`,
+    odds: (id: string | number) => `/matches/${id}/odds/`,
+    headToHead: (team1Id: string | number, team2Id: string | number) => 
+      `/matches/h2h/${team1Id}/${team2Id}/`,
+    events: (id: string | number) => `/matches/${id}/events/`,
+    lineup: (id: string | number, teamType: 'home' | 'away') => 
+      `/matches/${id}/${teamType}-lineup/`,
+    sports: '/matches/sports/',
+    leagues: '/matches/leagues/',
+    teams: '/matches/teams/',
+  },
+  
+  // Betting endpoints
+  betting: {
+    place: '/bets/place/',
+    myBets: '/betting/my-bets/',
+    history: '/bets/history/',
+    pending: '/betting/pending/',
+    cashout: (id: number) => `/bets/${id}/cashout/`,
+    parlay: '/betting/parlay/',
+    betTypes: '/betting/bet-types/',
+  },
+  
+  // Wallet endpoints
+  wallet: {
+    balance: '/wallet/balance/',
+    deposit: '/wallet/deposit/',
+    withdraw: '/wallet/withdraw/',
+    transactions: '/wallet/transactions/',
+  },
+  
+  // Leaderboard endpoints
   leaderboard: {
+    list: '/leaderboard/',
     top: '/leaderboard/top/',
     weekly: '/leaderboard/weekly/',
     monthly: '/leaderboard/monthly/',
@@ -60,19 +71,11 @@ export const API_ENDPOINTS = {
     myRank: '/leaderboard/my-rank/',
   },
   
-  // User
+  // User endpoints
   user: {
-    profile: '/auth/profile/',
-    updateProfile: '/auth/profile/update/',
-    stats: '/auth/stats/',
+    profile: '/user/profile/',
+    updateProfile: '/user/profile/update/',
+    settings: '/user/settings/',
+    stats: '/user/stats/',
   },
-  
-  external: {
-    liveMatches: '/matches/external/live/',
-    fixtures: '/matches/external/fixtures/',
-    matchStatistics: (matchId: string | number) => `/matches/external/statistics/${matchId}/`,
-    leagueStandings: (leagueId: string | number) => `/matches/external/standings/${leagueId}/`,
-    searchPlayers: (search: string) => `/matches/external/search-players/?search=${search}`,
-  },
-  
 };

@@ -21,42 +21,84 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor
+    // 1. Request interceptor: Attach the access_token
     this.api.interceptors.request.use(
       (config: CustomAxiosRequestConfig) => {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          config.headers.Authorization = `Token ${token}`;
+        if (typeof window !== 'undefined') {
+          const token = localStorage.getItem('access_token');
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
         }
         return config;
       },
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor
+    // 2. Response interceptor: Handle data and Token Refresh
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => response.data,
       async (error: AxiosError) => {
         const originalRequest = error.config as CustomAxiosRequestConfig;
 
+        // Check for 401 Unauthorized
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           
-          // Handle token refresh or redirect to login
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('user');
-          window.location.href = '/login';
-          
-          toast.error('Session expired. Please login again.');
+          const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+
+          // CRITICAL FIX: If no refresh token, don't throw. Silently logout.
+          if (!refreshToken) {
+            this.handleLogout();
+            return Promise.reject('AUTH_EXPIRED'); 
+          }
+
+          try {
+            // Use a clean axios instance for refresh to avoid interceptor loops
+            const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/token/refresh/`, {
+              refresh: refreshToken,
+            });
+            
+            const newAccessToken = response.data.access;
+            localStorage.setItem('access_token', newAccessToken);
+            
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            }
+            
+            // Retry the original request with the new token
+            return this.api(originalRequest);
+
+          } catch (refreshError) {
+            this.handleLogout();
+            return Promise.reject('AUTH_EXPIRED');
+          }
         }
 
-        // Handle other errors
+        // Avoid showing "Please login" toast for background balance checks
         const errorMessage = this.getErrorMessage(error);
-        toast.error(errorMessage);
+        if (error.response?.status !== 401) {
+          toast.error(errorMessage);
+        }
         
         return Promise.reject(error);
       }
     );
+  }
+
+  private handleLogout() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth-storage'); // Use this if you use Zustand persist
+      
+      // Only redirect if we aren't already on the auth page
+      if (!window.location.pathname.includes('/auth')) {
+        window.location.href = '/auth';
+        toast.error('Session expired. Please login again.');
+      }
+    }
   }
 
   private getErrorMessage(error: AxiosError): string {
@@ -68,22 +110,12 @@ class ApiClient {
     }
     
     switch (error.response?.status) {
-      case 400:
-        return 'Invalid request. Please check your input.';
-      case 401:
-        return 'Please login to continue.';
-      case 403:
-        return 'You don\'t have permission to perform this action.';
-      case 404:
-        return 'Resource not found.';
-      case 409:
-        return 'Conflict with existing data.';
-      case 429:
-        return 'Too many requests. Please try again later.';
-      case 500:
-        return 'Server error. Please try again later.';
-      default:
-        return 'An unexpected error occurred.';
+      case 400: return 'Invalid request.';
+      case 403: return 'Permission denied.';
+      case 404: return 'Resource not found.';
+      case 429: return 'Too many requests.';
+      case 500: return 'Server error. Please try again.';
+      default: return 'An unexpected error occurred.';
     }
   }
 

@@ -35,29 +35,37 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   }, []);
 
   // Fetch wallet balance when user is logged in
+// Fetch wallet balance only if we actually have a user AND a token
   useEffect(() => {
-    if (user && user.id) {
+    const token = localStorage.getItem('access_token'); // Or check your auth store
+    
+    if (user && user.id && token) {
       fetchWalletBalance();
       
-      // Set currency symbol from user's preferred currency
-      if (user.preferred_currency?.symbol) {
-        setCurrencySymbol(user.preferred_currency.symbol);
-      } else if (user.currency_symbol) {
-        setCurrencySymbol(user.currency_symbol);
-      }
-      
-      // Refresh wallet balance every 30 seconds
       const interval = setInterval(fetchWalletBalance, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
 
+  const [isFetching, setIsFetching] = useState(false);
+
   const fetchWalletBalance = async () => {
+    // Prevent multiple simultaneous calls
+    if (isFetching || !user) return; 
+
+    setIsFetching(true);
     try {
       const response = await apiClient.get(API_ENDPOINTS.wallet.balance);
       setWalletBalance(response.balance);
     } catch (error) {
-      console.error('Failed to fetch wallet balance:', error);
+      if (error === 'AUTH_EXPIRED') return;
+      
+      // If we get throttled (429), stop the interval temporarily
+      if ((error as any).status === 429) {
+        console.warn("Throttled by server. Slowing down...");
+      }
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -169,8 +177,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-400">Balance</span>
                       <span className="text-sm font-bold text-green-400">
-                        {currencySymbol}{walletBalance !== null ? walletBalance.toFixed(2) : '0.00'}
-                      </span>
+                      {currencySymbol}{walletBalance !== null ? Number(walletBalance).toFixed(2) : '0.00'}                      </span>
                     </div>
                   </motion.div>
                 </Link>
@@ -225,7 +232,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                             <span className="text-sm">Wallet</span>
                             {walletBalance !== null && (
                               <span className="ml-auto text-xs text-green-400">
-                                {currencySymbol}{walletBalance.toFixed(2)}
+                                {currencySymbol}{Number(walletBalance).toFixed(2)}
                               </span>
                             )}
                           </Link>
@@ -287,8 +294,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-sm font-bold text-green-400">
-                  {currencySymbol}{walletBalance !== null ? walletBalance.toFixed(2) : '0.00'}
-                </span>
+                {currencySymbol}{walletBalance !== null ? Number(walletBalance).toFixed(2) : '0.00'}                </span>
                 <ChevronDown className="w-4 h-4 text-gray-400" />
               </div>
             </Link>

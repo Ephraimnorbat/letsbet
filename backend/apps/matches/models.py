@@ -17,6 +17,7 @@ class League(models.Model):
     name = models.CharField(max_length=200)
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='leagues')
     country = models.CharField(max_length=100)
+    external_key = models.CharField(max_length=100, unique=True, null=True, blank=True)
     logo = models.ImageField(upload_to='leagues/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -3,13 +3,19 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django.utils import timezone
-from rest_framework.authtoken.models import Token
+from rest_framework import status, permissions
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import check_password
 
-
+from .utils import generate_verification_token
 from .tasks import update_exchange_rates
 from .models import UserProfile, LoginHistory, Country, Currency
 from .serializers import (
@@ -39,72 +45,115 @@ class CurrencyListView(generics.ListAPIView):
     permission_classes = [AllowAny]
 
 class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            
-            # Create auth token for the user
-            token, created = Token.objects.get_or_create(user=user)
-            
-            return Response({
-                'user': UserSerializer(user).data,
-                'token': token.key,
-                'message': 'Registration successful'
-            }, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def perform_create(self, serializer):
+        user = serializer.save()
+
+        # 🔥 Ensure user is not verified
+        user.is_verified = False
+        user.save()
+
+        uid, token = generate_verification_token(user)
+
+        verification_link = f"http://localhost:3000/verify/{uid}/{token}"
+
+        send_mail(
+            "Verify your account",
+            f"Click to verify: {verification_link}",
+            "noreply@letsbet.com",
+            [user.email],
+            fail_silently=False,
+        )
 
 class LoginView(APIView):
-    permission_classes = [AllowAny]
-    
+    permission_classes = [permissions.AllowAny]
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            password = serializer.validated_data['password']
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        try:
+            # 1. Fetch user by email
+            user = User.objects.get(email=email)
             
-            user = authenticate(request, username=email, password=password)
-            
-            if user is not None:
-                # Get or create token
-                token, created = Token.objects.get_or_create(user=user)
+            # 2. Check password directly
+            if not check_password(password, user.password):
+                return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
                 
-                # Update last login
-                user.last_login = timezone.now()
+        except User.DoesNotExist:
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 3. Check Account Status
+        if not user.is_active:
+             return Response({"error": "Account is disabled"}, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.is_verified:
+            return Response({"error": "Please verify your email"}, status=status.HTTP_403_FORBIDDEN)
+
+        # 4. Success - Create history
+        LoginHistory.objects.create(
+            user=user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
+        )
+
+        # 5. Handle Currency/Exchange Rate (New Schema Logic)
+        # Fallback to KES if user has no preferred currency set
+        currency = user.preferred_currency
+        if not currency:
+            currency, _ = Currency.objects.get_or_create(
+                code='KES', 
+                defaults={'name': 'Kenyan Shilling', 'symbol': 'KSh', 'exchange_rate_to_kES': 1.0}
+            )
+            user.preferred_currency = currency
+            user.save()
+
+        # 6. Generate Tokens
+        refresh = RefreshToken.for_user(user)
+        
+        # Ensure profile exists
+        UserProfile.objects.get_or_create(user=user)
+
+        return Response({
+            "message": "Login successful",
+            "token": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                # Flattened for your BettingSlip frontend:
+                "currency_symbol": currency.symbol,
+                "exchange_rate": float(currency.exchange_rate_to_kES),
+            }
+        }, status=status.HTTP_200_OK)
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, uid, token):
+        try:
+            uid = urlsafe_base64_decode(uid).decode()
+            user = User.objects.get(pk=uid)
+
+            if user.is_verified:
+                return Response({'message': 'Account already verified'})
+
+            if default_token_generator.check_token(user, token):
+                user.is_verified = True
                 user.save()
-                
-                # Log login history
-                x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-                if x_forwarded_for:
-                    ip = x_forwarded_for.split(',')[0]
-                else:
-                    ip = request.META.get('REMOTE_ADDR')
-                
-                user_agent = request.META.get('HTTP_USER_AGENT', '')
-                
-                LoginHistory.objects.create(
-                    user=user,
-                    ip_address=ip,
-                    user_agent=user_agent
-                )
-                
-                return Response({
-                    'token': token.key,
-                    'user': UserSerializer(user).data,
-                    'message': 'Login successful'
-                }, status=status.HTTP_200_OK)
+                return Response({'message': 'Email verified successfully'})
             else:
-                return Response({
-                    'error': 'Invalid email or password'
-                }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Invalid token'}, status=400)
+
+        except Exception:
+            return Response({'error': 'Invalid request'}, status=400)
+
 
 class ProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
@@ -205,19 +254,12 @@ class ChangePasswordView(APIView):
             return Response({'message': 'Password changed successfully'})
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Delete the user's token
-        try:
-            request.user.auth_token.delete()
-        except:
-            pass
-        
         return Response({'message': 'Logged out successfully'})
-
+        
 class UserStatsView(APIView):
     permission_classes = [IsAuthenticated]
 

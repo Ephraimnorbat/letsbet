@@ -2,17 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingCart, Trash2, TrendingUp, AlertCircle, Clock } from 'lucide-react';
+import { X, ShoppingCart, Trash2 } from 'lucide-react';
 import { useBettingStore } from '@/store/bettingStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
-interface BettingSlipProps {
-  isMobile?: boolean;
-}
-
-export default function BettingSlip({ isMobile = false }: BettingSlipProps) {
+export default function BettingSlip({ isMobile = false }: { isMobile?: boolean }) {
   const router = useRouter();
   const { user } = useAuthStore();
   const {
@@ -26,18 +22,16 @@ export default function BettingSlip({ isMobile = false }: BettingSlipProps) {
   } = useBettingStore();
   
   const [isOpen, setIsOpen] = useState(false);
-  const [stakeInput, setStakeInput] = useState(currentBetSlip.stake.toString());
+  const [stakeInput, setStakeInput] = useState("");
 
   useEffect(() => {
-    setStakeInput(currentBetSlip.stake.toString());
-  }, [currentBetSlip.stake]);
+    setStakeInput(currentBetSlip?.stake > 0 ? currentBetSlip.stake.toString() : "");
+  }, [currentBetSlip?.stake]);
 
   const handleStakeChange = (value: string) => {
     setStakeInput(value);
     const stake = parseFloat(value);
-    if (!isNaN(stake) && stake >= 0) {
-      updateStake(stake);
-    }
+    if (!isNaN(stake)) updateStake(stake);
   };
 
   const handlePlaceBet = () => {
@@ -49,69 +43,48 @@ export default function BettingSlip({ isMobile = false }: BettingSlipProps) {
     placeBet();
   };
 
-  // Mobile Version - Bottom Drawer
+  const contentProps = {
+    selections,
+    totalOdds: currentBetSlip.totalOdds,
+    stake: currentBetSlip.stake,
+    stakeInput,
+    onStakeChange: handleStakeChange,
+    potentialWin: currentBetSlip.potentialWin,
+    onPlaceBet: handlePlaceBet,
+    onRemove: removeFromBetSlip,
+    isLoading,
+  };
+
   if (isMobile) {
     return (
       <>
-        {/* Floating Action Button */}
         {selections.length > 0 && !isOpen && (
           <motion.button
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            whileTap={{ scale: 0.95 }}
+            initial={{ scale: 0 }} animate={{ scale: 1 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full p-4 shadow-lg z-50"
+            className="fixed bottom-6 right-6 bg-blue-600 text-white rounded-full p-4 z-50 shadow-xl"
           >
             <div className="relative">
               <ShoppingCart className="w-6 h-6" />
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="absolute -top-2 -right-2 bg-red-500 text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                 {selections.length}
               </span>
             </div>
           </motion.button>
         )}
-
-        {/* Bottom Drawer */}
         <AnimatePresence>
           {isOpen && (
             <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-50"
-                onClick={() => setIsOpen(false)}
-              />
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 25 }}
-                className="fixed bottom-0 left-0 right-0 bg-slate-900 rounded-t-2xl shadow-2xl z-50 max-h-[80vh] overflow-y-auto"
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/60 z-50" onClick={() => setIsOpen(false)} />
+              <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                className="fixed bottom-0 left-0 right-0 bg-slate-900 rounded-t-2xl z-50 p-4 max-h-[85vh] overflow-y-auto"
               >
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold">Betting Slip</h2>
-                    <button
-                      onClick={() => setIsOpen(false)}
-                      className="p-2 hover:bg-slate-800 rounded-lg transition"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                  <BettingSlipContent
-                    selections={selections}
-                    totalOdds={currentBetSlip.totalOdds}
-                    stake={currentBetSlip.stake}
-                    stakeInput={stakeInput}
-                    onStakeChange={handleStakeChange}
-                    potentialWin={currentBetSlip.potentialWin}
-                    onPlaceBet={handlePlaceBet}
-                    onRemove={removeFromBetSlip}
-                    onClear={clearBetSlip}
-                    isLoading={isLoading}
-                  />
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-bold text-lg">Bet Slip</h2>
+                  <button onClick={() => setIsOpen(false)}><X /></button>
                 </div>
+                <BettingSlipContent {...contentProps} />
               </motion.div>
             </>
           )}
@@ -120,155 +93,99 @@ export default function BettingSlip({ isMobile = false }: BettingSlipProps) {
     );
   }
 
-  // Desktop Version - Fixed Right Sidebar
   return (
-    <div className="bg-slate-900 rounded-xl shadow-xl h-full overflow-y-auto">
-      <div className="sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 p-4 z-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold">Betting Slip</h2>
-            <p className="text-xs text-gray-400 mt-1">Add selections to place bets</p>
-          </div>
-          {selections.length > 0 && (
-            <button
-              onClick={clearBetSlip}
-              className="p-2 hover:bg-slate-800 rounded-lg transition text-red-400"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+    <div className="bg-slate-900 rounded-xl border border-slate-800 flex flex-col h-full">
+      <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+        <h2 className="font-bold">Betting Slip</h2>
+        {selections.length > 0 && (
+          <button onClick={clearBetSlip} className="text-red-400 hover:bg-red-400/10 p-1 rounded">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
-      
-      <div className="p-4">
-        <BettingSlipContent
-          selections={selections}
-          totalOdds={currentBetSlip.totalOdds}
-          stake={currentBetSlip.stake}
-          stakeInput={stakeInput}
-          onStakeChange={handleStakeChange}
-          potentialWin={currentBetSlip.potentialWin}
-          onPlaceBet={handlePlaceBet}
-          onRemove={removeFromBetSlip}
-          onClear={clearBetSlip}
-          isLoading={isLoading}
-        />
+      <div className="p-4 overflow-y-auto flex-1">
+        <BettingSlipContent {...contentProps} />
       </div>
     </div>
   );
 }
 
-// Shared Content Component
 function BettingSlipContent({
-  selections,
-  totalOdds,
-  stake,
-  stakeInput,
-  onStakeChange,
-  potentialWin,
-  onPlaceBet,
-  onRemove,
-  onClear,
-  isLoading,
+  selections, totalOdds, stake, stakeInput, onStakeChange, potentialWin, onPlaceBet, onRemove, isLoading
 }: any) {
+  const { user } = useAuthStore();
+  const currencySymbol = user?.currency_symbol || '$';
+  const exchangeRate = user?.exchange_rate || 1;
+  const minStakeUserCurrency = 1000 / exchangeRate;
+
   if (selections.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-full flex items-center justify-center">
-          <ShoppingCart className="w-8 h-8 text-gray-500" />
-        </div>
-        <p className="text-gray-400">No selections added</p>
-        <p className="text-xs text-gray-500 mt-2">Click on odds to add to slip</p>
+      <div className="text-center py-10 text-gray-500">
+        <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-20" />
+        <p>Your slip is empty</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Selections List */}
-      <div className="space-y-2 max-h-[400px] overflow-y-auto">
-        {selections.map((selection: any) => (
-          <motion.div
-            key={selection.id}
-            layout
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="bg-slate-800/50 rounded-lg p-3 group hover:bg-slate-800 transition"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <p className="font-medium text-sm line-clamp-2">{selection.matchName}</p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <span className="text-xs text-gray-400 capitalize">{selection.selection}</span>
-                  <span className="text-xs font-bold text-green-500">{selection.odds}</span>
-                </div>
-              </div>
-              <button
-                onClick={() => onRemove(selection.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition"
-              >
-                <X className="w-4 h-4 text-red-400" />
-              </button>
+      <div className="space-y-2">
+        {selections.map((s: any) => (
+          <div key={s.id} className="bg-slate-800/50 border border-slate-700 p-3 rounded-lg relative group">
+            <button onClick={() => onRemove(s.id)} className="absolute top-2 right-2 text-gray-500 hover:text-red-400">
+              <X className="w-3 h-3" />
+            </button>
+            <p className="text-xs text-gray-400 font-medium truncate pr-4">{s.matchName}</p>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-sm font-bold text-white capitalize">{s.selection}</span>
+              <span className="text-sm font-bold text-green-500">{s.odds.toFixed(2)}</span>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 
-      {/* Bet Details */}
-      <div className="border-t border-slate-800 pt-4 space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Total Selections</span>
-          <span className="font-medium">{selections.length}</span>
-        </div>
+      <div className="pt-4 border-t border-slate-800 space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-gray-400">Total Odds</span>
-          <span className="font-bold text-green-500">{totalOdds.toFixed(2)}</span>
+          <span className="font-bold text-white">{totalOdds.toFixed(2)}</span>
         </div>
-        
+
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-2">
-            Stake Amount (KSH)
+          <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-2 font-bold">
+            Stake Amount ({currencySymbol})
           </label>
-          <input
-            type="number"
-            value={stakeInput}
-            onChange={(e) => onStakeChange(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-            placeholder="Enter stake"
-            min="10"
-            step="10"
-          />
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {[10, 50, 100, 500].map((amt) => (
+              <button key={amt} onClick={() => onStakeChange(amt.toString())}
+                className="py-1.5 text-xs bg-slate-800 border border-slate-700 rounded hover:bg-slate-700 text-white transition">
+                +{amt}
+              </button>
+            ))}
+          </div>
+          <input type="number" value={stakeInput} onChange={(e) => onStakeChange(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:border-blue-500 outline-none"
+            placeholder={`Min. ${minStakeUserCurrency.toFixed(2)}`} />
         </div>
-        
-        <div className="bg-gradient-to-r from-blue-600/10 to-purple-600/10 rounded-lg p-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-400">Potential Win</span>
-            <div className="text-right">
-              <div className="text-xl font-bold text-green-500">
-                {potentialWin.toFixed(2)} KSH
-              </div>
-              <div className="text-xs text-gray-500">
-                {stake > 0 ? `+${((potentialWin - stake) / stake * 100).toFixed(1)}%` : '0%'} profit
-              </div>
-            </div>
+
+        <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-4">
+          <div className="flex justify-between items-center mb-1 text-xs text-blue-400">
+            <span>Potential Win</span>
+            <span>Min: 1,000 KES</span>
+          </div>
+          <div className="flex justify-between items-end">
+            <span className="text-2xl font-black text-green-500 leading-none">
+              {currencySymbol}{potentialWin.toFixed(2)}
+            </span>
           </div>
         </div>
 
         <button
           onClick={onPlaceBet}
-          disabled={isLoading || stake <= 0}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+          disabled={isLoading || (stake * exchangeRate) < 1000}
+          className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 text-white py-4 rounded-xl font-black transition-all shadow-lg shadow-blue-900/20"
         >
-          <span className="relative z-10">
-            {isLoading ? 'Placing Bet...' : `Place Bet • ${potentialWin.toFixed(2)} KSH`}
-          </span>
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          {isLoading ? 'PLACING BET...' : 'PLACE BET'}
         </button>
-
-        <p className="text-xs text-center text-gray-500">
-          By placing a bet, you agree to our Terms & Conditions
-        </p>
       </div>
     </div>
   );
