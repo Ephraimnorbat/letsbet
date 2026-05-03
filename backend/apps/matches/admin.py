@@ -1,3 +1,4 @@
+# apps/matches/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Sport, League, Team, Match, MatchEvent
@@ -17,10 +18,11 @@ class SportAdmin(admin.ModelAdmin):
 
 @admin.register(League)
 class LeagueAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'sport', 'country', 'is_active', 'created_at')
+    # Added external_key to list_display and list_editable for easy API mapping
+    list_display = ('id', 'name', 'sport', 'country', 'external_key', 'is_active')
     list_filter = ('sport', 'country', 'is_active')
-    search_fields = ('name', 'country')
-    list_editable = ('is_active',)
+    search_fields = ('name', 'country', 'external_key')
+    list_editable = ('is_active', 'external_key')
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
@@ -31,14 +33,15 @@ class TeamAdmin(admin.ModelAdmin):
 
 @admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):
-    list_display = ('id', 'match_display', 'league', 'status', 'score_display', 'match_date')
+    # Added external_id to display to see which matches were synced from API
+    list_display = ('id', 'external_id', 'match_display', 'league', 'status', 'score_display', 'match_date')
     list_filter = ('status', 'league', 'match_date')
-    search_fields = ('home_team__name', 'away_team__name', 'league__name')
+    search_fields = ('home_team__name', 'away_team__name', 'league__name', 'external_id')
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         ('Match Info', {
-            'fields': ('league', 'home_team', 'away_team', 'match_date', 'status')
+            'fields': ('external_id', 'league', 'home_team', 'away_team', 'match_date', 'status')
         }),
         ('Scores', {
             'fields': ('home_score', 'away_score', 'halftime_home_score', 'halftime_away_score')

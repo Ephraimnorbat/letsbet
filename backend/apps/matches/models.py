@@ -61,6 +61,7 @@ class Match(models.Model):
     away_team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='away_matches')
     match_date = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    external_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     
     # Scores
     home_score = models.IntegerField(default=0)

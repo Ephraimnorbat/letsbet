@@ -15,6 +15,8 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import check_password
 
+
+from .helpers import resolve_user_currency
 from .utils import generate_verification_token
 from .tasks import update_exchange_rates
 from .models import UserProfile, LoginHistory, Country, Currency
@@ -66,7 +68,6 @@ class RegisterView(generics.CreateAPIView):
             [user.email],
             fail_silently=False,
         )
-
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -78,44 +79,39 @@ class LoginView(APIView):
         password = serializer.validated_data['password']
 
         try:
-            # 1. Fetch user by email
             user = User.objects.get(email=email)
-            
-            # 2. Check password directly
+
             if not check_password(password, user.password):
                 return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-                
+
         except User.DoesNotExist:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # 3. Check Account Status
+        # Account checks
         if not user.is_active:
-             return Response({"error": "Account is disabled"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Account is disabled"}, status=status.HTTP_403_FORBIDDEN)
 
         if not user.is_verified:
             return Response({"error": "Please verify your email"}, status=status.HTTP_403_FORBIDDEN)
 
-        # 4. Success - Create history
+        # Login history
         LoginHistory.objects.create(
             user=user,
             ip_address=request.META.get('REMOTE_ADDR'),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
         )
 
-        # 5. Handle Currency/Exchange Rate (New Schema Logic)
-        # Fallback to KES if user has no preferred currency set
-        currency = user.preferred_currency
-        if not currency:
-            currency, _ = Currency.objects.get_or_create(
-                code='KES', 
-                defaults={'name': 'Kenyan Shilling', 'symbol': 'KSh', 'exchange_rate_to_kES': 1.0}
-            )
+        # ✅ FIXED: Centralized currency logic
+        currency = resolve_user_currency(user.country, user.preferred_currency)
+
+        # persist if missing
+        if not user.preferred_currency:
             user.preferred_currency = currency
             user.save()
 
-        # 6. Generate Tokens
+        # Tokens
         refresh = RefreshToken.for_user(user)
-        
+
         # Ensure profile exists
         UserProfile.objects.get_or_create(user=user)
 
@@ -127,9 +123,9 @@ class LoginView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
-                # Flattened for your BettingSlip frontend:
                 "currency_symbol": currency.symbol,
                 "exchange_rate": float(currency.exchange_rate_to_kES),
+                "currency_code": currency.code,  # ✅ add this (very useful frontend)
             }
         }, status=status.HTTP_200_OK)
 
@@ -267,7 +263,9 @@ class UserStatsView(APIView):
         user = request.user
         
         # Get user's currency symbol
-        currency_symbol = user.preferred_currency.symbol if user.preferred_currency else 'KSh'
+        currency = resolve_user_currency(user.country, user.preferred_currency)
+
+        currency_symbol = currency.symbol
         
         stats = {
             'total_bets': user.total_bets,

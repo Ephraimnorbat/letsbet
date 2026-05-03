@@ -4,12 +4,12 @@ export interface MatchOdds {
 }
 
 export interface Match {
-  match_id: string;
+  id: string; // Changed from match_id to match your JSON
   home_team: string;
   away_team: string;
   commence_time: string;
-  odds: MatchOdds;
-  bookmaker: string | null;
+  sport_title: string;
+  bookmakers: any[]; // The new structure contains a list of bookmakers
 }
 
 export interface LeagueOddsResponse {

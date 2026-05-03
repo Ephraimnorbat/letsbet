@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
+import { API_ENDPOINTS } from '@/lib/api/endpoints';
 
 export interface LiveMatch {
   fixture: {
@@ -31,14 +32,12 @@ export interface LiveMatch {
   };
 }
 
-export const useLiveMatches = () => {
+export const useLiveMatches = (sportKey: string) => {
   return useQuery({
-    queryKey: ['live-matches-external'],
+    queryKey: ['liveMatches', sportKey],
     queryFn: async () => {
-      const response = await apiClient.get('/matches/external/live/');
-      return response.data;
-    },
-    refetchInterval: 30000, // Refresh every 30 seconds
-    staleTime: 15000,
+      // This uses your object instead of a hardcoded string
+      return apiClient.get(API_ENDPOINTS.matches.scores(sportKey));
+    }
   });
 };

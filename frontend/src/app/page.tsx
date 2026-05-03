@@ -3,11 +3,13 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, TrendingUp, Zap, Shield, Gift } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import LiveMatchesSection from '@/components/home/LiveMatchesSection';
 import FeaturedSports from '@/components/home/FeaturedSports';
 import UpcomingMatches from '@/components/home/UpcomingMatches';
 
 export default function Home() {
+  const [activeLeague, setActiveLeague] = useState('upcoming');
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -41,7 +43,7 @@ export default function Home() {
               className="flex space-x-4"
             >
               <Link
-                href="/register"
+                href="/auth"
                 className="px-6 py-3 bg-white text-gray-900 rounded-lg font-semibold hover:bg-gray-100 transition flex items-center space-x-2"
               >
                 <span>Start Betting</span>
@@ -60,14 +62,12 @@ export default function Home() {
 
       <div className="space-y-12">
         {/* Featured Sports */}
-        <FeaturedSports />
+        <FeaturedSports onLeagueSelect={setActiveLeague} activeLeague={activeLeague} />
 
         {/* Live Matches Section */}
-        <LiveMatchesSection />
-
+        <LiveMatchesSection sportKey={activeLeague} />
         {/* Upcoming Matches */}
-        <UpcomingMatches />
-
+        <UpcomingMatches sportKey={activeLeague} />
         {/* Features Section */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-slate-800 rounded-lg p-6 text-center hover:bg-slate-700 transition-all hover:transform hover:scale-105">

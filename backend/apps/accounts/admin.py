@@ -29,10 +29,12 @@ class CustomUserAdmin(UserAdmin):
     ordering = ('-date_joined',)
     
     def display_balance(self, obj):
-        if hasattr(obj, 'wallet'):
-            return format_html('<span style="color: green;">${:.2f}</span>', obj.wallet.balance)
+        if hasattr(obj, 'wallet') and obj.wallet.balance is not None:
+            # Pre-format the string outside of the format_html format-string logic
+            balance_str = f"{float(obj.wallet.balance):.2f}"
+            return format_html('<span style="color: green;">${}</span>', balance_str)
         return format_html('<span style="color: gray;">No wallet</span>')
-    display_balance.short_description = 'Balance'
+    
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):

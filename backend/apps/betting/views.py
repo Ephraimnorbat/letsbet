@@ -1,4 +1,5 @@
 from rest_framework import generics, status, viewsets
+from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
@@ -8,10 +9,11 @@ from rest_framework.views import APIView
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from django.utils.timezone import now
 
-
+from apps.matches.models import Match, League, Team
 from .models import Bet, BetSlip, BetType
-from .serializers import BetSerializer, CreateBetSerializer, BetSlipSerializer, BetTypeSerializer
+from .serializers import BetSerializer, CreateBetSerializer, BetSlipSerializer, BetTypeSerializer, BetSlipHistorySerializer
 from apps.wallet.models import Transaction
 
 
@@ -21,9 +23,129 @@ class BetTypeViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
 class PlaceBetView(generics.CreateAPIView):
-    serializer_class = CreateBetSerializer
     permission_classes = [IsAuthenticated]
 
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        selections_data = request.data.get('selections', [])
+        stake = float(request.data.get('stake', 0))
+
+        # --- STEP 1: CREATE THE SLIP ONCE (Outside the loop) ---
+        # We calculate the total odds and potential win for the WHOLE slip first
+        total_odds = 1.0
+        for s in selections_data:
+            total_odds *= float(s['odds'])
+        
+        master_slip = BetSlip.objects.create(
+            user=request.user,
+            total_stake=stake,
+            total_odds=total_odds,
+            potential_win=stake * total_odds,
+            status='pending'
+        )
+
+        # --- STEP 2: LINK SELECTIONS TO THE MASTER SLIP ---
+        for sel in selections_data:
+            # 1. Handle Missing League: Since the frontend doesn't send it, 
+            # we use a default or extract it if available.
+            league_obj, _ = League.objects.get_or_create(
+                name="General League", # Or sel.get('league', 'General')
+                defaults={'sport_id': 1}
+            )
+
+            # 2. Split the matchName string into Home and Away
+            # "Sunderland vs Nottingham Forest" -> ["Sunderland", "Nottingham Forest"]
+            match_name = sel.get('matchName', 'Home vs Away')
+            teams = match_name.split(' vs ')
+            home_name = teams[0].strip()
+            away_name = teams[1].strip() if len(teams) > 1 else "Away Team"
+
+            # 3. Get or Create Teams
+            home_team_obj, _ = Team.objects.get_or_create(
+                name=home_name,
+                defaults={'league': league_obj}
+            )
+            away_team_obj, _ = Team.objects.get_or_create(
+                name=away_name,
+                defaults={'league': league_obj}
+            )
+
+            # 4. Get or Create Match
+            match_obj, created = Match.objects.get_or_create(
+                external_id=sel['matchId'],
+                defaults={
+                    'league': league_obj,
+                    'home_team': home_team_obj,
+                    'away_team': away_team_obj,
+                    'match_date': now(), # Uses the imported 'now'
+                    'status': 'scheduled'
+                }
+            )
+
+            # 5. Link to the single master_slip
+            Bet.objects.create(
+                slip=master_slip,
+                user=request.user,
+                match=match_obj,
+                selection=sel['selection'],
+                odds=sel['odds'],
+                bet_type_id=1,
+                stake=stake,
+                status='pending'
+            )
+    
+
+            # 4. Finally, create the Bet linked to the Single master_slip
+            Bet.objects.create(
+                slip=master_slip,
+                user=request.user,
+                match=match_obj,
+                selection=sel['selection'],
+                odds=sel['odds'],
+                bet_type_id=1,
+                stake=stake,
+                status='pending'
+            )
+
+        # --- STEP 3: DEDUCT WALLET ONCE ---
+        wallet = request.user.wallet
+        wallet.balance = F('balance') - stake
+        wallet.save()
+
+        return Response({"message": "Slip placed!"}, status=201)
+
+    def perform_custom_create(self, serializer):
+        user = self.request.user
+        wallet = user.wallet
+        stake = serializer.validated_data['stake']
+
+        wallet.refresh_from_db()
+        if wallet.balance < stake:
+            raise serializers.ValidationError("Insufficient balance")
+
+        # Deduct balance
+        wallet.balance = F('balance') - stake
+        wallet.save()
+        
+        # Save Bet
+        bet = serializer.save(user=user)
+
+        # Record Transaction
+        Transaction.objects.create(
+            user=user,
+            amount=stake,
+            transaction_type='debit',
+            description=f"Bet placed: {bet.match.home_team.name} vs {bet.match.away_team.name}",
+            reference=f"BET_{bet.id}"
+        )
+
+        # Update user stats
+        user.total_bets = F('total_bets') + 1
+        user.save()
+        
+        return bet
+    
     @transaction.atomic
     def perform_create(self, serializer):
         user = self.request.user

@@ -71,18 +71,58 @@ export default function AuthPage() {
     fetchCountriesAndCurrencies();
   }, []);
 
+  // Auto fallback to USD if nothing selected
+  useEffect(() => {
+    if (!formData.currencyId && currencies.length > 0) {
+      const usd = currencies.find(c => c.code === 'USD');
+      if (usd) {
+        setFormData(prev => ({
+          ...prev,
+          currencyId: usd.id.toString()
+        }));
+      }
+    }
+  }, [currencies]);
+
   // Auto-select currency when country changes
   useEffect(() => {
     if (formData.countryId && countries.length > 0) {
-      const selectedCountry = countries.find(c => c.id === parseInt(formData.countryId));
-      if (selectedCountry && selectedCountry.default_currency) {
+      const selectedCountry = countries.find(
+        c => c.id === parseInt(formData.countryId)
+      );
+
+      if (selectedCountry?.default_currency_details) {
         setFormData(prev => ({
           ...prev,
-          currencyId: selectedCountry.default_currency.id.toString()
+          currencyId: selectedCountry.default_currency_details.id.toString()
         }));
       }
     }
   }, [formData.countryId, countries]);
+
+  useEffect(() => {
+  const detectCountry = async () => {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+
+      const country = countries.find(c => c.code === data.country_code);
+
+      if (country) {
+        setFormData(prev => ({
+          ...prev,
+          countryId: country.id.toString()
+        }));
+      }
+    } catch (err) {
+      console.log('Geo detect failed');
+    }
+  };
+
+  if (countries.length > 0) {
+    detectCountry();
+  }
+}, [countries]);
 
   const fetchCountriesAndCurrencies = async () => {
     try {
@@ -148,9 +188,9 @@ export default function AuthPage() {
         newErrors.countryId = 'Please select your country';
       }
       
-      if (!formData.currencyId) {
-        newErrors.currencyId = 'Please select your preferred currency';
-      }
+      // if (!formData.currencyId) {
+      //   newErrors.currencyId = 'Please select your preferred currency';
+      // }
     }
 
     setErrors(newErrors);
@@ -237,7 +277,7 @@ export default function AuthPage() {
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-            <h1 className="text-2xl font-bold text-center">Let'sBet</h1>
+            <h1 className="text-2xl font-bold text-center">Unibet 360</h1>
             <p className="text-center text-blue-100 mt-2">
               {isLogin ? 'Welcome back to your betting platform' : 'Join the ultimate betting experience'}
             </p>
@@ -541,9 +581,10 @@ export default function AuthPage() {
                     </p>
                   )}
                   
-                  {formData.countryId && !formData.currencyId && countries.length > 0 && (
-                    <p className="mt-1 text-xs text-blue-500">
-                      Recommended: {countries.find(c => c.id === parseInt(formData.countryId))?.default_currency?.code}
+                  {formData.currencyId && (
+                    <p className="mt-1 text-xs text-green-500 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Auto-selected based on your country
                     </p>
                   )}
                 </div>

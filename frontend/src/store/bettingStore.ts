@@ -106,11 +106,29 @@ export const useBettingStore = create<BettingState>((set, get) => ({
     }
   },
 
-  fetchMyBets: async () => {
+fetchMyBets: async () => {
     set({ isLoading: true });
     try {
       const response = await apiClient.get(API_ENDPOINTS.betting.myBets);
-      set({ myBets: response.data || response });
+      
+      // Handle the three common shapes of API responses:
+      // 1. Paginated: response.data.results
+      // 2. Simple Array: response.data
+      // 3. Directly the response (depending on your axios interceptor)
+      
+      const rawData = response?.data || response;
+      
+      const bets = Array.isArray(rawData) 
+        ? rawData 
+        : (rawData?.results && Array.isArray(rawData.results))
+          ? rawData.results 
+          : [];
+
+      console.log("DEBUG: Processed Bets List:", bets); // Check your browser console
+      set({ myBets: bets });
+    } catch (error) {
+      console.error("Failed to fetch bets:", error);
+      set({ myBets: [] }); 
     } finally {
       set({ isLoading: false });
     }

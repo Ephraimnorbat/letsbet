@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+
+from .helpers import resolve_user_currency
 from .models import UserProfile, LoginHistory, Country, Currency
 
 User = get_user_model()
@@ -20,7 +22,7 @@ class CountrySerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ['currency_symbol', 'exchange_rate', 'country'] # Explicitly include these
+        fields = '__all__'
         read_only_fields = ['user', 'created_at', 'updated_at']
 
 class UserSerializer(serializers.ModelSerializer):
@@ -54,7 +56,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
                  'country', 'country_details', 'preferred_currency', 'currency_details']
         read_only_fields = fields
 
-# Update RegisterSerializer to include country and currency
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
@@ -63,61 +65,60 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'confirm_password', 'phone_number',
-                 'country_id', 'preferred_currency_id']
+        fields = [
+            'username', 'email', 'password', 'confirm_password',
+            'phone_number', 'country_id', 'preferred_currency_id'
+        ]
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+
         if User.objects.filter(email=data['email']).exists():
             raise serializers.ValidationError({"email": "Email already exists"})
-        
-        # Validate country if provided
-        if 'country_id' in data and data['country_id']:
-            try:
-                country = Country.objects.get(id=data['country_id'], is_active=True)
-                data['country'] = country
-            except Country.DoesNotExist:
-                raise serializers.ValidationError({"country_id": "Invalid country selected"})
-        
-        # Validate currency if provided, otherwise use country's default
-        if 'preferred_currency_id' in data and data['preferred_currency_id']:
-            try:
-                currency = Currency.objects.get(id=data['preferred_currency_id'], is_active=True)
-                data['preferred_currency'] = currency
-            except Currency.DoesNotExist:
-                raise serializers.ValidationError({"preferred_currency_id": "Invalid currency selected"})
-        elif 'country' in data and data['country'].default_currency:
-            data['preferred_currency'] = data['country'].default_currency
-        
+
         return data
 
     def create(self, validated_data):
         validated_data.pop('confirm_password')
-        if 'country_id' in validated_data:
-            validated_data.pop('country_id')
-        if 'preferred_currency_id' in validated_data:
-            validated_data.pop('preferred_currency_id')
-        
-        country = validated_data.pop('country', None)
-        currency = validated_data.pop('preferred_currency', None)
+
+        country_id = validated_data.pop('country_id', None)
+        currency_id = validated_data.pop('preferred_currency_id', None)
+
+        country = None
+        currency = None
+
+        # ✅ Resolve country
+        if country_id:
+            try:
+                country = Country.objects.get(id=country_id, is_active=True)
+            except Country.DoesNotExist:
+                raise serializers.ValidationError({"country_id": "Invalid country"})
+
+        # ✅ Resolve currency
+        if currency_id:
+            try:
+                currency = Currency.objects.get(id=currency_id, is_active=True)
+            except Currency.DoesNotExist:
+                raise serializers.ValidationError({"preferred_currency_id": "Invalid currency"})
+
+        # ✅ Final currency decision (🔥 centralized logic)
+        final_currency = resolve_user_currency(country, currency)
+
         password = validated_data.pop('password')
-        
+
         user = User(**validated_data)
-        user.is_verified = False
         user.set_password(password)
         user.email = user.email.lower()
-        
-        if country:
-            user.country = country
-        if currency:
-            user.preferred_currency = currency
-        
+        user.is_verified = False
+
+        user.country = country
+        user.preferred_currency = final_currency
+
         user.save()
-        
-        # Create user profile
+
         UserProfile.objects.create(user=user)
-        
+
         return user
 
 # Keep your existing LoginHistorySerializer

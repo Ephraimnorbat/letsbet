@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
     path('balance/', views.WalletBalanceView.as_view(), name='wallet-balance'),
-    path('deposit/', views.DepositView.as_view(), name='deposit'),
-    path('withdraw/', views.WithdrawView.as_view(), name='withdraw'),
+    # path('deposit/', views.DepositView.as_view(), name='deposit'),
+    # path('withdraw/', views.WithdrawView.as_view(), name='withdraw'),
     path('transactions/', views.TransactionHistoryView.as_view(), name='transactions'),
 ]

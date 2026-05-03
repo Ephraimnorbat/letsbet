@@ -9,8 +9,12 @@ class WalletAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
     
     def display_balance(self, obj):
-        return format_html('<span style="color: green; font-weight: bold;">${:.2f}</span>', obj.balance)
-    display_balance.short_description = 'Balance'
+        # Force format it to a plain string first
+        balance_str = f"{float(obj.balance):.2f}"
+        return format_html(
+            '<span style="color: green; font-weight: bold;">${}</span>', 
+            balance_str
+        )
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
@@ -21,8 +25,12 @@ class TransactionAdmin(admin.ModelAdmin):
     
     def amount_display(self, obj):
         color = 'green' if obj.transaction_type == 'credit' else 'red'
-        return format_html('<span style="color: {};">${:.2f}</span>', color, obj.amount)
-    amount_display.short_description = 'Amount'
+        amount_str = f"{float(obj.amount):.2f}"
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">${}</span>', 
+            color, 
+            amount_str
+        )
     
     actions = ['mark_as_completed', 'mark_as_failed']
     

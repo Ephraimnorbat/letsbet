@@ -3,6 +3,20 @@ from pathlib import Path
 from decouple import config
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
+load_dotenv() # This reads the .env file
+
+# Add these lines to make them accessible via settings.VARIABLE_NAME
+NOWPAYMENTS_API_KEY = os.getenv('NOWPAYMENTS_API_KEY')
+NOWPAYMENTS_EMAIL = os.getenv('NOWPAYMENTS_EMAIL')
+NOWPAYMENTS_PASSWORD = os.getenv('NOWPAYMENTS_PASSWORD')
+NOWPAYMENTS_IPN_URL = os.getenv('NOWPAYMENTS_IPN_URL')
+NOWPAYMENTS_IPN_SECRET = os.getenv('NOWPAYMENTS_IPN_SECRET')
+NOWPAYMENTS_BASE_URL = os.getenv('NOWPAYMENTS_BASE_URL', 'https://api.nowpayments.io/v1/')
+
+ODDS_API_KEY = os.getenv('ODDS_API_KEY')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -30,6 +44,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_spectacular',
     'django_celery_beat',
+    'channels',
     
     
     # Local apps
@@ -38,6 +53,7 @@ INSTALLED_APPS = [
     'apps.betting',
     'apps.wallet',
     'apps.leaderboard',
+    'apps.payments'
 ]
 
 MIDDLEWARE = [
@@ -71,6 +87,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'api.wsgi.application'
 
+ASGI_APPLICATION = 'api.asgi.application'
 # Database
 DATABASES = {
     'default': {
@@ -186,6 +203,7 @@ SPORTS_API_KEY = config('SPORTS_API_KEY', default='')
 SPORTS_API_HOST = config('SPORTS_API_HOST', default='free-api-live-football-data.p.rapidapi.com')
 SPORTS_API_BASE_URL = config('SPORTS_API_BASE_URL', default='https://free-api-live-football-data.p.rapidapi.com')
 
+
 # Cache Configuration
 # Redis Configuration (if installed)
 if config('USE_REDIS', default=False, cast=bool):
@@ -226,7 +244,16 @@ else:
 #     }
 # }
 
+#channel configs for websockets
 
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(config("REDIS_HOST", default="127.0.0.1"), 6379)],
+        },
+    },
+}
 
 
 #celery configs

@@ -1,5 +1,6 @@
 from celery import shared_task
 from django.utils import timezone
+from django.conf import settings
 from datetime import timedelta
 import requests
 from .models import Match, League, Team
@@ -131,3 +132,89 @@ def cleanup_old_matches():
         return f"Found {count} old matches to archive"
     except Exception as e:
         return f"Error cleaning up old matches: {str(e)}"
+    
+
+# Expanded list of League IDs (API-Football IDs)
+TARGET_LEAGUES = [
+    39,   # Premier League (England)
+    140,  # La Liga (Spain)
+    78,   # Bundesliga (Germany)
+    135,  # Serie A (Italy)
+    61,   # Ligue 1 (France)
+    371,  # Kenyan Premier League
+    2,    # UEFA Champions League
+]
+
+@shared_task(name="sync_all_leagues_matches")
+def update_matches_broadcast():
+    """
+    Fetches matches for all targeted leagues to populate the grid layout.
+    """
+    api_key = settings.RAPID_API_KEY
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+    }
+
+    results_count = 0
+
+    for league_id in TARGET_LEAGUES:
+        # Fetching for the current date to keep it precise
+        params = {
+            "league": league_id,
+            "season": "2025", 
+            "date": timezone.now().strftime('%Y-%m-%d'),
+            "timezone": "Africa/Nairobi"
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=20)
+            if response.status_code != 200:
+                continue
+
+            data = response.json().get('response', [])
+
+            for item in data:
+                fix = item['fixture']
+                lg = item['league']
+                ts = item['teams']
+                gl = item['goals']
+
+                # 1. Sync League
+                league_obj, _ = League.objects.update_or_create(
+                    external_id=lg['id'],
+                    defaults={'name': lg['name'], 'country': lg['country']}
+                )
+
+                # 2. Sync Teams
+                home_obj, _ = Team.objects.update_or_create(
+                    external_id=ts['home']['id'],
+                    defaults={'name': ts['home']['name'], 'league': league_obj}
+                )
+                away_obj, _ = Team.objects.update_or_create(
+                    external_id=ts['away']['id'],
+                    defaults={'name': ts['away']['name'], 'league': league_obj}
+                )
+
+                # 3. Sync Match
+                Match.objects.update_or_create(
+                    external_id=fix['id'],
+                    defaults={
+                        'league': league_obj,
+                        'home_team': home_obj,
+                        'away_team': away_obj,
+                        'match_date': fix['date'],
+                        'status': fix['status']['short'].lower(),
+                        'home_score': gl['home'] or 0,
+                        'away_score': gl['away'] or 0,
+                        'is_active': True
+                    }
+                )
+                results_count += 1
+
+        except Exception as e:
+            print(f"Error fetching League {league_id}: {str(e)}")
+
+    return f"Successfully synced {results_count} matches across targeted leagues."

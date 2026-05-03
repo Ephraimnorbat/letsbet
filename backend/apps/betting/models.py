@@ -13,6 +13,27 @@ class BetType(models.Model):
 
     def __str__(self):
         return self.name
+    
+
+
+class BetSlip(models.Model):
+    SLIP_STATUS = [
+        ('pending', 'Pending'),
+        ('won', 'Won'),
+        ('lost', 'Lost'),
+        ('cashed_out', 'Cashed Out'),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bet_slips')
+    total_odds = models.DecimalField(max_digits=12, decimal_places=2)
+    total_stake = models.DecimalField(max_digits=12, decimal_places=2)
+    potential_win = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=SLIP_STATUS, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'bet_slips'
+        ordering = ['-created_at']
+
 
 class Bet(models.Model):
     BET_STATUS = [
@@ -22,14 +43,14 @@ class Bet(models.Model):
         ('cancelled', 'Cancelled'),
         ('cashed_out', 'Cashed Out'),
     ]
-    
+    slip = models.ForeignKey(BetSlip, on_delete=models.CASCADE, related_name='selections', null=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bets')
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='bets')
     bet_type = models.ForeignKey(BetType, on_delete=models.CASCADE)
     selection = models.CharField(max_length=50)  # home, draw, away, over, under, etc.
     odds = models.DecimalField(max_digits=5, decimal_places=2)
-    stake = models.DecimalField(max_digits=10, decimal_places=2)
-    potential_win = models.DecimalField(max_digits=10, decimal_places=2)
+    stake = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    potential_win = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=BET_STATUS, default='pending')
     
     # For parlay bets
@@ -52,16 +73,3 @@ class Bet(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.match} - {self.stake}"
 
-class BetSlip(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bet_slips')
-    bets = models.ManyToManyField(Bet, related_name='bet_slips')
-    total_odds = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    total_stake = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    potential_win = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'bet_slips'
-        ordering = ['-created_at']

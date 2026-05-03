@@ -113,7 +113,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             <Link href="/" className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200" />
               <span className="relative text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-                LETSBET
+                UNIBET 360
               </span>
             </Link>
           </div>
