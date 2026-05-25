@@ -12,7 +12,7 @@ from django.core.cache import cache
 from django.utils.timezone import now
 
 from apps.matches.models import Match, League, Team
-from .models import Bet, BetSlip, BetType
+from .models import Bet, BetSlip, BetType, SharedBetslip
 from .serializers import BetSerializer, CreateBetSerializer, BetSlipSerializer, BetTypeSerializer, BetSlipHistorySerializer
 from apps.wallet.models import Transaction
 
@@ -357,3 +357,38 @@ class UpcomingMatchesView(APIView):
                 "status": "error",
                 "message": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class ShareBetslipView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Accepts a selection list payload and returns a share code"""
+        selections = request.data.get('selections')
+        if not selections or not isinstance(selections, list):
+            return Response({"error": "Invalid selections array"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        shared_slip = SharedBetslip.objects.create(
+            creator=request.user,
+            selections_payload=selections
+        )
+        
+        return Response({
+            "share_code": shared_slip.code,
+            "url": f"/betslip/{shared_slip.code}"
+        }, status=status.HTTP_201_CREATED)
+
+
+class RetrieveSharedBetslipView(APIView):
+    permission_classes = [AllowAny] # Anyone can look up a code
+
+    def get(self, request, code):
+        """Looks up a share code and returns the selections payload to the frontend"""
+        try:
+            shared_slip = SharedBetslip.objects.get(code=code.upper())
+            return Response({
+                "code": shared_slip.code,
+                "selections": shared_slip.selections_payload
+            }, status=status.HTTP_200_OK)
+        except SharedBetslip.DoesNotExist:
+            return Response({"error": "Betslip code not found or expired"}, status=status.HTTP_404_NOT_FOUND)

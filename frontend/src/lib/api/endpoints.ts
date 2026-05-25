@@ -53,6 +53,8 @@ export const API_ENDPOINTS = {
     history: '/betting/history/',
     upcoming: '/betting/matches/upcoming/',
     cashout: (id: number) => `/betting/cashout/${id}/`,
+    shareSlip: '/betting/betslip/share/',
+    loadSharedSlip: (code: string) => `/betting/betslip/load/${code}/`,
   },
   
   // Wallet endpoints

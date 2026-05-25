@@ -54,6 +54,7 @@ const casinoNav = [
 
 const footerNav = [
   { name: 'My bets', href: '/my-bets', icon: History },
+  { name: 'Transactions', href: '/transactions', icon: CircleDollarSign },
   { name: 'Support Chat', href: '/support', icon: HelpCircle },
 ];
 

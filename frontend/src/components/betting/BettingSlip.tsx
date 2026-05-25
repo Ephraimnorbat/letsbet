@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShoppingCart, Trash2 } from 'lucide-react';
+import { X, ShoppingCart, Trash2, Share2, Copy, Check } from 'lucide-react';
 import { useBettingStore } from '@/store/bettingStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
+import { apiClient } from '@/lib/api/client';
 import toast from 'react-hot-toast';
 
 export default function BettingSlip({ isMobile = false }: { isMobile?: boolean }) {
@@ -118,6 +119,42 @@ function BettingSlipContent({
   const exchangeRate = user?.exchange_rate || 1;
   const minStakeUserCurrency = 1000 / exchangeRate;
 
+  const [shareCode, setShareCode] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
+
+  useEffect(() => {
+    if (selections.length === 0) {
+      setShareCode(null);
+    }
+  }, [selections.length]);
+
+  const handleGenerateShareCode = async () => {
+    setIsSharing(true);
+    try {
+      const response = await apiClient.post('/betting/betslip/share/', {
+        selections: selections
+      });
+      if (response && response.share_code) {
+        setShareCode(response.share_code);
+        toast.success('Booking code generated successfully!');
+      }
+    } catch (err) {
+      toast.error('Failed to create booking parameter payload.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    if (!shareCode) return;
+    const shareUrl = `${window.location.origin}?code=${shareCode}`;
+    navigator.clipboard.writeText(shareUrl);
+    setHasCopied(true);
+    toast.success('Booking link copied to clipboard!');
+    setTimeout(() => setHasCopied(false), 2000);
+  };
+
   if (selections.length === 0) {
     return (
       <div className="text-center py-10 text-gray-500">
@@ -170,7 +207,7 @@ function BettingSlipContent({
         <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-4">
           <div className="flex justify-between items-center mb-1 text-xs text-blue-400">
             <span>Potential Win</span>
-            <span>Min: 1,000 KES</span>
+            <span>Min: $ 0.10</span>
           </div>
           <div className="flex justify-between items-end">
             <span className="text-2xl font-black text-green-500 leading-none">
@@ -186,6 +223,34 @@ function BettingSlipContent({
         >
           {isLoading ? 'PLACING BET...' : 'PLACE BET'}
         </button>
+
+        {/* --- Shared Booking Actions Layer --- */}
+        <div className="pt-2">
+          {!shareCode ? (
+            <button
+              onClick={handleGenerateShareCode}
+              disabled={isSharing}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 uppercase py-3 rounded-xl transition border border-slate-700/60 flex items-center justify-center gap-2"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              {isSharing ? 'GENERATING CODE...' : 'SHARE BETSLIP'}
+            </button>
+          ) : (
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-2 animate-in fade-in duration-200">
+              <div className="flex flex-col">
+                <span className="text-[9px] text-gray-500 uppercase font-black tracking-wider">Booking Code</span>
+                <span className="font-mono text-sm font-black text-emerald-400 uppercase tracking-widest">{shareCode}</span>
+              </div>
+              <button
+                onClick={handleCopyToClipboard}
+                className="bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition text-slate-200 font-mono text-xs uppercase font-bold px-3 flex items-center gap-1.5"
+              >
+                {hasCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                {hasCopied ? 'COPIED' : 'COPY LINK'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

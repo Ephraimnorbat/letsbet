@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import transaction as db_transaction
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -69,26 +69,33 @@ class RequestWithdrawalView(APIView):
 
     def post(self, request):
         user = request.user
-        amount = request.data.get("amount")
+        amount_raw = request.data.get("amount")
         method = request.data.get("method") # e.g. M-Pesa, Bank, USDT
         details = request.data.get("details")
 
-        if not amount or float(amount) <= 0:
-            return Response({"error": "Invalid amount"}, status=400)
+        # 1. Validate and convert the amount safely to a Decimal
+        try:
+            amount = Decimal(str(amount_raw))
+        except (ValueError, TypeError, InvalidOperation):
+            return Response({"error": "Invalid amount format"}, status=400)
+
+        if amount <= 0:
+            return Response({"error": "Amount must be greater than zero"}, status=400)
 
         # Use atomic transaction to ensure balance and records match
         with db_transaction.atomic():
+            # select_for_update() locks the row to prevent race conditions
             wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
             
-            if wallet.balance < float(amount):
+            if wallet.balance < amount:
                 return Response({"error": "Insufficient balance"}, status=400)
 
-            # 1. Deduct immediately (Hold in pending)
-            wallet.balance -= float(amount)
-            wallet.total_withdrawn += float(amount)
+            # 2. Deduct immediately (using pure Decimal math)
+            wallet.balance -= amount
+            wallet.total_withdrawn += amount
             wallet.save()
 
-            # 2. Create Admin Request
+            # 3. Create Admin Request
             withdrawal = WithdrawalRequest.objects.create(
                 user=user,
                 amount=amount,
@@ -97,13 +104,13 @@ class RequestWithdrawalView(APIView):
                 status='pending'
             )
 
-            # 3. Create Ledger Entry in Wallet App
+            # 4. Create Ledger Entry in Wallet App
             Transaction.objects.create(
                 user=user,
                 amount=amount,
                 transaction_type='debit',
                 status='pending',
-                description=f'Withdrawal to {method}',
+                description=f'Withdrawal request to {method}',
                 reference=f"WTH-{withdrawal.id}",
                 payment_method=method,
                 payment_details={'details': details}

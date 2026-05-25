@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
+import uuid
 from django.db import transaction
 from django.utils import timezone
 from apps.betting.models import BetSlip, Bet
 from apps.matches.services import sports_api
-from apps.wallet.models import Wallet 
+from apps.wallet.models import Wallet, Transaction
+
 
 class Command(BaseCommand):
     help = 'Settles pending bet slips based on match results from the API'
@@ -59,18 +61,30 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f"Slip {slip.id} marked as LOST"))
                 
                 elif all_bets_settled:
-                    # Every single selection in this slip won
-                    slip.status = 'won'
-                    slip.save()
-                    
-                    # Payout: Update user wallet
-                    wallet, created = Wallet.objects.get_or_create(user=slip.user)
-                    wallet.balance += slip.potential_win
-                    wallet.save()
-                    
-                    self.stdout.write(self.style.SUCCESS(
-                        f"Slip {slip.id} WON! KSh {slip.potential_win} added to {slip.user.username}'s wallet."
-                    ))
+                        slip.status = 'won'
+                        slip.save()
+                        
+                        # 1. Update Wallet Balances
+                        wallet, created = Wallet.objects.get_or_create(user=slip.user)
+                        wallet.balance += slip.potential_win
+                        wallet.total_won += slip.potential_win # Update your stats field!
+                        wallet.save()
+                        
+                        # 2. Create Transaction Record
+                        Transaction.objects.create(
+                            user=slip.user,
+                            amount=slip.potential_win,
+                            transaction_type='credit',
+                            category='bet_payout', # If you added categories
+                            status='completed',
+                            description=f"Payout for Winning Slip #{slip.id}",
+                            reference=f"WIN-SLIP-{slip.id}-{uuid.uuid4().hex[:6].upper()}",
+                            completed_at=timezone.now()
+                        )
+                        
+                        self.stdout.write(self.style.SUCCESS(
+                            f"Slip {slip.id} settled: KSh {slip.potential_win} added and transaction recorded."
+                        ))
 
     def evaluate_bet(self, bet, match_data):
         """

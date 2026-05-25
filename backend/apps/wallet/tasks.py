@@ -1,8 +1,14 @@
 from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
+import requests
+from django.core.cache import cache
 from django.db import transaction as db_transaction
-from .models import Transaction, Wallet
+
+
+from .models import Transaction, Wallet, CurrencyRate
+
+
 
 @shared_task
 def expire_stale_deposits():
@@ -34,3 +40,29 @@ def check_expired_bonuses():
         wallets.update(bonus_balance=0)
         
     return f"Cleared bonus for {count} inactive wallets"
+
+
+@shared_task
+def sync_exchange_rates():
+    """Fetches fiat data from Frankfurter API and saves to cache/DB"""
+    try:
+        # Fetch conversions with EUR base
+        url = "https://api.frankfurter.app/latest?from=EUR&to=KES,USD,GBP"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        rates = data.get('rates', {})
+        # Save EUR baseline explicitly
+        CurrencyRate.objects.update_or_create(target='EUR', defaults={'rate': 1.0000})
+        
+        for currency, rate in rates.items():
+            CurrencyRate.objects.update_or_create(
+                target=currency,
+                defaults={'rate': rate}
+            )
+            
+        # Invalidate cache
+        cache.delete('global_currency_rates')
+        return "Currency exchange parameters synced successfully."
+    except Exception as e:
+        return f"Failed to sync currency metrics: {str(e)}"

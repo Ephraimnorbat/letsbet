@@ -1,5 +1,10 @@
+
+import string
+import random
 from django.db import models
 from django.conf import settings
+from django.db import models
+
 from apps.matches.models import Match
 
 class BetType(models.Model):
@@ -72,4 +77,31 @@ class Bet(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.match} - {self.stake}"
+    
+
+
+
+def generate_share_code():
+    """Generates a secure 6-character alphanumeric code"""
+    while True:
+        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if not SharedBetslip.objects.filter(code=code).exists():
+            return code
+
+class SharedBetslip(models.Model):
+    code = models.CharField(max_length=10, unique=True, default=generate_share_code)
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Stores the raw array of structural odds market data chosen by the user
+    # e.g., [{"match_id": 482, "market_type": "1X2", "selected_outcome": "Home", "odds": 2.15}]
+    selections_payload = models.JSONField()
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'shared_betslips'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Betslip Code: {self.code}"
 

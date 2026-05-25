@@ -14,5 +14,8 @@ urlpatterns = [
     path('cashout/<int:bet_id>/', views.CashoutBetView.as_view(), name='cashout-bet'),
     path('parlay/', views.ParlayBetView.as_view(), name='parlay-bet'),
     path('matches/upcoming/', views.UpcomingMatchesView.as_view(), name='upcoming-matches'),
+    path('betslip/share/', views.ShareBetslipView.as_view(), name='share-betslip'),
+    path('betslip/load/<code>/', views.RetrieveSharedBetslipView.as_view(), name='load-shared-betslip'),
+    # path('betslip/load/<str:code>/', views.RetrieveSharedBetslipView.as_view(), name='load-shared-betslip'),
 
 ]
