@@ -1,16 +1,18 @@
+# account/serializers.py
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-
 from .helpers import resolve_user_currency
 from .models import UserProfile, LoginHistory, Country, Currency
 
 User = get_user_model()
 
-# Add these new serializers
+
 class CurrencySerializer(serializers.ModelSerializer):
     class Meta:
         model = Currency
         fields = ['id', 'code', 'name', 'symbol', 'exchange_rate_to_kES']
+
 
 class CountrySerializer(serializers.ModelSerializer):
     default_currency_details = CurrencySerializer(source='default_currency', read_only=True)
@@ -19,19 +21,21 @@ class CountrySerializer(serializers.ModelSerializer):
         model = Country
         fields = ['id', 'code', 'name', 'phone_code', 'flag', 'default_currency', 'default_currency_details']
 
+
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = '__all__'
         read_only_fields = ['user', 'created_at', 'updated_at']
 
+
 class UserSerializer(serializers.ModelSerializer):
-    # Nest the profile data so the frontend 'User' interface is satisfied
     profile = UserProfileSerializer(read_only=True)
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'profile']
+
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -42,7 +46,7 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Email and password are required")
         return data
 
-# Update UserDetailSerializer
+
 class UserDetailSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
     country_details = CountrySerializer(source='country', read_only=True)
@@ -74,7 +78,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
 
-        if User.objects.filter(email=data['email']).exists():
+        if User.objects.filter(email=data['email'].lower()).exists():
             raise serializers.ValidationError({"email": "Email already exists"})
 
         return data
@@ -88,22 +92,20 @@ class RegisterSerializer(serializers.ModelSerializer):
         country = None
         currency = None
 
-        # ✅ Resolve country
         if country_id:
             try:
                 country = Country.objects.get(id=country_id, is_active=True)
             except Country.DoesNotExist:
-                raise serializers.ValidationError({"country_id": "Invalid country"})
+                raise serializers.ValidationError({"country_id": "Invalid country selection"})
 
-        # ✅ Resolve currency
         if currency_id:
             try:
                 currency = Currency.objects.get(id=currency_id, is_active=True)
             except Currency.DoesNotExist:
-                raise serializers.ValidationError({"preferred_currency_id": "Invalid currency"})
+                raise serializers.ValidationError({"preferred_currency_id": "Invalid currency selection"})
 
-        # ✅ Final currency decision (🔥 centralized logic)
-        final_currency = resolve_user_currency(country, currency)
+        # Fall back to resolving via country ONLY if preferred_currency_id wasn't submitted
+        final_currency = currency if currency else resolve_user_currency(country, None)
 
         password = validated_data.pop('password')
 
@@ -114,21 +116,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user.country = country
         user.preferred_currency = final_currency
-
-        user.save()
+        
+        # Bypass custom save assignment routine to avoid overriding choices
+        super(User, user).save()
 
         UserProfile.objects.create(user=user)
-
         return user
 
-# Keep your existing LoginHistorySerializer
+
 class LoginHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = LoginHistory
         fields = '__all__'
         read_only_fields = ['user', 'login_time']
 
-# Keep your existing ChangePasswordSerializer
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, min_length=8)

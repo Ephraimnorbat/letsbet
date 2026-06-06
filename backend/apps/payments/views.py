@@ -12,10 +12,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from django.db import transaction
 import requests
 
-from apps.wallet.models import Wallet, Transaction
+# App Imports
+from apps.wallet.models import Wallet, Transaction, Currency  # Added Currency mapping relation here
 from .models import PaymentTransaction, WithdrawalRequest
 from .services.nowpayments import NowPaymentsService
 from django.contrib.auth import get_user_model
@@ -56,12 +56,12 @@ class CreateDepositView(APIView):
             return Response(payment_data)
 
         except requests.exceptions.HTTPError as e:
-            # THIS IS THE MOST IMPORTANT PART: It will show you exactly what NOWPayments hates
             print(f"NOWPayments API Error: {e.response.text}")
             return Response({"error": e.response.json()}, status=e.response.status_code)
         except Exception as e:
             print(f"System Error: {str(e)}")
             return Response({"error": "Internal Server Error"}, status=500)
+
 
 class RequestWithdrawalView(APIView):
     """Entry point for Manual Withdrawals"""
@@ -73,7 +73,6 @@ class RequestWithdrawalView(APIView):
         method = request.data.get("method") # e.g. M-Pesa, Bank, USDT
         details = request.data.get("details")
 
-        # 1. Validate and convert the amount safely to a Decimal
         try:
             amount = Decimal(str(amount_raw))
         except (ValueError, TypeError, InvalidOperation):
@@ -82,20 +81,17 @@ class RequestWithdrawalView(APIView):
         if amount <= 0:
             return Response({"error": "Amount must be greater than zero"}, status=400)
 
-        # Use atomic transaction to ensure balance and records match
         with db_transaction.atomic():
-            # select_for_update() locks the row to prevent race conditions
             wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
             
             if wallet.balance < amount:
                 return Response({"error": "Insufficient balance"}, status=400)
 
-            # 2. Deduct immediately (using pure Decimal math)
+            # Deduct standard system units from central base wallet 
             wallet.balance -= amount
             wallet.total_withdrawn += amount
             wallet.save()
 
-            # 3. Create Admin Request
             withdrawal = WithdrawalRequest.objects.create(
                 user=user,
                 amount=amount,
@@ -104,12 +100,13 @@ class RequestWithdrawalView(APIView):
                 status='pending'
             )
 
-            # 4. Create Ledger Entry in Wallet App
             Transaction.objects.create(
                 user=user,
                 amount=amount,
+                transaction_currency_code=wallet.currency.code, # Tracks dynamic token target parameters
                 transaction_type='debit',
                 status='pending',
+                category='withdrawal',
                 description=f'Withdrawal request to {method}',
                 reference=f"WTH-{withdrawal.id}",
                 payment_method=method,
@@ -127,8 +124,6 @@ class NowPaymentsWebhookView(APIView):
         received_sig = request.headers.get("x-nowpayments-sig")
         payload = request.body
         
-        # If testing manually with Postman/cURL, signature will fail. 
-        # For production, we keep it strict.
         if not settings.DEBUG: 
             expected_sig = hmac.new(
                 key=settings.NOWPAYMENTS_IPN_SECRET.encode(),
@@ -141,7 +136,7 @@ class NowPaymentsWebhookView(APIView):
                 return Response({"error": "Invalid signature"}, status=400)
 
         # 2. Extract Data
-        data = request.data # DRF automatically parses JSON body
+        data = request.data 
         payment_id = data.get("payment_id")
         status = data.get("payment_status")
         
@@ -153,52 +148,70 @@ class NowPaymentsWebhookView(APIView):
             print(f"WEBHOOK ERROR: Payment ID {payment_id} not found in database")
             return Response({"error": "Transaction not found"}, status=404)
 
-        # Update status immediately
+        # Update transactional state status index
         tx.status = status
         tx.save()
 
-        # 3. Credit Wallet
+        # 3. Credit Wallet using Dynamic Currency Conversions
         if status == "finished" and not tx.is_credited:
-            with transaction.atomic():
-                wallet, _ = Wallet.objects.select_for_update().get_or_create(user=tx.user)
-
-                # Convert to Decimal to match the Wallet model's field type
-                amount_to_add = Decimal(str(tx.price_amount)) 
-                
-                wallet.balance += amount_to_add
-                wallet.total_deposited += amount_to_add
-                wallet.save()
-
-                # Record in Ledger using the same Decimal value
-                Transaction.objects.create(
-                    user=tx.user,
-                    amount=amount_to_add,
-                    transaction_type='credit',
-                    status='completed',
-                    description=f'Deposit via {tx.pay_currency.upper()}',
-                    reference=tx.order_id,
-                    payment_method='crypto',
-                    payment_details=data,
-                    completed_at=timezone.now()
-                )
-
-                tx.is_credited = True
-                tx.save()
-
-            # 4. WebSocket Update
             try:
-                channel_layer = get_channel_layer()
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{tx.user.id}",
-                    {
-                        "type": "payment_update",
-                        "status": "completed",
-                        "amount": str(tx.price_amount),
-                        "balance": str(wallet.balance),
-                    }
-                )
-            except Exception as e:
-                print(f"WebSocket Error: {str(e)}")
+                # Resolve the user's active display currency context from the wallet profile
+                with db_transaction.atomic():
+                    wallet, _ = Wallet.objects.select_for_update().get_or_create(user=tx.user)
+                    user_currency = wallet.currency
+
+                    # Convert incoming price_amount to clean Decimal string values
+                    inbound_raw_amount = Decimal(str(tx.price_amount))
+
+                    # Multi-Currency Conversion Logic
+                    # KES Base Amount = Incoming Foreign Amount / exchange_rate_to_kes
+                    if user_currency.code == 'KES':
+                        base_kes_amount = inbound_raw_amount
+                    else:
+                        base_kes_amount = inbound_raw_amount / user_currency.exchange_rate_to_kes
+                    
+                    base_kes_amount = base_kes_amount.quantize(Decimal('0.01'))
+
+                    # Apply base value mutations to the user's wallet
+                    wallet.balance += base_kes_amount
+                    wallet.total_deposited += base_kes_amount
+                    wallet.save()
+
+                    # Record transaction log line item using the resolved system currency data
+                    Transaction.objects.create(
+                        user=tx.user,
+                        amount=base_kes_amount,
+                        transaction_currency_code=user_currency.code,
+                        transaction_type='credit',
+                        status='completed',
+                        category='deposit',
+                        description=f'Deposit via {tx.pay_currency.upper()}',
+                        reference=tx.order_id,
+                        payment_method='crypto',
+                        payment_details=data,
+                        completed_at=timezone.now()
+                    )
+
+                    tx.is_credited = True
+                    tx.save()
+
+                # 4. WebSocket Notification Update
+                try:
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_{tx.user.id}",
+                        {
+                            "type": "payment_update",
+                            "status": "completed",
+                            "amount": str(tx.price_amount),
+                            "balance": str(wallet.balance),
+                        }
+                    )
+                except Exception as e:
+                    print(f"WebSocket Error: {str(e)}")
+
+            except Exception as processing_err:
+                print(f"Critical Webhook wallet processing structural fault: {str(processing_err)}")
+                return Response({"error": "Failed to process ledger balance credit"}, status=500)
 
         return Response({"status": "ok"})
-

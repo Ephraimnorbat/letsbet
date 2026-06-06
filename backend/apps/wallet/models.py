@@ -1,30 +1,34 @@
 from django.db import models
 from django.conf import settings
+from decimal import Decimal
 
-class CurrencyRate(models.Model):
-    # e.g., source="USD", target="KES", rate=132.50
-    source = models.CharField(max_length=3, default="USD")
-    target = models.CharField(max_length=3, unique=True)
-    rate = models.DecimalField(max_digits=10, decimal_places=4)
-    updated_at = models.DateTimeField(auto_now=True)
+from apps.accounts.models import Currency
 
-    class Meta:
-        db_table = 'currency_rates'
-
-    def __str__(self):
-        return f"1 {self.source} = {self.rate} {self.target}"
+def get_default_currency():
+    """
+    Dynamically looks up and returns the default primary key 
+    id for USD from the centralized accounts Currency table.
+    """
+    try:
+        # Returns the integer primary key for USD (e.g., 2)
+        return Currency.objects.get(code="USD").id
+    except Currency.DoesNotExist:
+        # Safe fallback for initial deployment phases
+        return None
 
 class Wallet(models.Model):
-    CURRENCY_CHOICES = [
-        ('KES', 'Kenyan Shilling'),
-        ('USD', 'US Dollar'),
-        ('EUR', 'Euro'),
-        ('GBP', 'British Pound'),
-    ]
-
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wallet')
-    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default='KES') # New field
-    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0) # Base amount always stored in KES
+    
+    # Points securely to accounts.Currency with our new dynamic USD default handler
+    currency = models.ForeignKey(
+        Currency, 
+        on_delete=models.PROTECT, 
+        related_name='wallets',
+        default=get_default_currency
+    )
+    
+    # Financial metrics remain consistently tracked in system base values (KES)
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     bonus_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_deposited = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_withdrawn = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -36,21 +40,22 @@ class Wallet(models.Model):
         db_table = 'wallets'
 
     def __str__(self):
-        return f"{self.user.username} - Balance: {self.balance} {self.currency}"
+        return f"{self.user.username} - Balance: {self.balance} KES (View: {self.currency.code})"
 
     @property
     def converted_balance(self):
-        """Returns balance calculated on the fly into target currency"""
-        if self.currency == 'KES':
+        if self.currency.code == 'KES':
             return self.balance
-        try:
-            # Frankfurter uses EUR as base, we store KES conversions
-            rate_obj = CurrencyRate.objects.get(target=self.currency)
-            kes_rate = CurrencyRate.objects.get(target='KES')
-            # Cross rate math: amount_in_kes * (target_rate / kes_rate)
-            return round(self.balance * (rate_obj.rate / kes_rate.rate), 2)
-        except CurrencyRate.DoesNotExist:
-            return self.balance
+        converted = self.balance * self.currency.exchange_rate_to_kes
+        return converted.quantize(Decimal('0.01'))
+
+    @property
+    def converted_bonus_balance(self):
+        if self.currency.code == 'KES':
+            return self.bonus_balance
+        converted = self.bonus_balance * self.currency.exchange_rate_to_kes
+        return converted.quantize(Decimal('0.01'))
+
 
 class Transaction(models.Model):
     TRANSACTION_TYPES = [
@@ -64,7 +69,7 @@ class Transaction(models.Model):
         ('failed', 'Failed'),
         ('cancelled', 'Cancelled'),
     ]
-    # New categories to make filtering easier for the user
+    
     CATEGORY_CHOICES = [
         ('deposit', 'Deposit'),
         ('withdrawal', 'Withdrawal'),
@@ -74,7 +79,13 @@ class Transaction(models.Model):
     ]
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='transactions')
+    
+    # Store transaction base metrics consistently in base KES values for unified balance accounting
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # ✅ OPTIONAL AUDIT TRACE: Capture tracking values at the exact moment of execution
+    transaction_currency_code = models.CharField(max_length=3, default="KES", help_text="Snapshot of the currency code during payment execution")
+    
     transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPES)
     status = models.CharField(max_length=20, choices=TRANSACTION_STATUS, default='pending')
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='deposit')    
@@ -94,4 +105,4 @@ class Transaction(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.username} - {self.transaction_type} - {self.amount}"
+        return f"{self.user.username} - {self.transaction_type} - {self.amount} KES"

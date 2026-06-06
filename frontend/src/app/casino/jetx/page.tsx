@@ -19,17 +19,37 @@ export default function AviatorCasinoPage() {
   const { gameState, placeBet, cashout, queueBetForNextRound, activeQueuedPanels, isConnected } = useCrashWebSocket();
   const { user } = useAuthStore(); 
 
+  // Dynamic Profile Presentation Configurations
+  const currencySymbol = user?.currency_symbol || '$';
+  const currencyCode = user?.currency_code || 'USD';
+  const localeFormat = user?.currency_code === 'KES' ? 'en-KE' : 'en-US';
+
+  // Base Minimum Increments Adjusted For Global Token Profiles
+  const minIncrementValue = user?.currency_code === 'KES' ? 10.00 : 1.00;
+  const initialStakeString = user?.currency_code === 'KES' ? '10.00' : '1.00';
+
   // Console Panel States
-  const [stakeOne, setStakeOne] = useState<string>('10.00');
+  const [stakeOne, setStakeOne] = useState<string>(initialStakeString);
   const [hasBetOne, setHasBetOne] = useState<boolean>(false);
   const [cashedOutOne, setCashedOutOne] = useState<boolean>(false);
 
-  const [stakeTwo, setStakeTwo] = useState<string>('10.00');
+  const [stakeTwo, setStakeTwo] = useState<string>(initialStakeString);
   const [hasBetTwo, setHasBetTwo] = useState<boolean>(false);
   const [cashedOutTwo, setCashedOutTwo] = useState<boolean>(false);
 
   const [history, setHistory] = useState<number[]>([1.22, 5.40, 1.02, 2.15, 11.80, 1.56]);
   const isInitialFetchDone = useRef(false);
+
+  // Fallback preset options scaled dynamically based on currency contextual profiles
+  const presetOptions = user?.currency_code === 'KES' 
+    ? [100, 200, 500, 1000] 
+    : [5, 10, 20, 50];
+
+  // Sync initial console layout defaults when user metrics shift inside global stores
+  useEffect(() => {
+    setStakeOne(initialStakeString);
+    setStakeTwo(initialStakeString);
+  }, [initialStakeString]);
 
   // ================= ONE-TIME WALLET INITIALIZATION =================
   useEffect(() => {
@@ -67,12 +87,12 @@ export default function AviatorCasinoPage() {
   const handleModifyStakeValue = (panel: 1 | 2, direction: 'up' | 'down') => {
     const currentStr = panel === 1 ? stakeOne : stakeTwo;
     let val = parseFloat(currentStr);
-    if (isNaN(val)) val = 10.00;
+    if (isNaN(val)) val = minIncrementValue;
 
     if (direction === 'up') {
-      val += 10.00;
+      val += minIncrementValue;
     } else {
-      val = Math.max(10.00, val - 10.00);
+      val = Math.max(minIncrementValue, val - minIncrementValue);
     }
 
     if (panel === 1) setStakeOne(val.toFixed(2));
@@ -108,7 +128,7 @@ export default function AviatorCasinoPage() {
       user: state.user ? { ...state.user, balance: updatedBalance } : null
     }));
 
-    toast.success(`Bet of KSh ${amount.toFixed(2)} placed!`);
+    toast.success(`Bet of ${currencySymbol}${amount.toFixed(2)} placed!`);
   };
 
   const handleExecuteCashout = (panel: 1 | 2) => {
@@ -130,7 +150,7 @@ export default function AviatorCasinoPage() {
       }));
     }
 
-    toast.success(`Cashed Out! + KSh ${profit.toFixed(2)}`, { icon: '✈️' });
+    toast.success(`Cashed Out! + ${currencySymbol}${profit.toFixed(2)}`, { icon: '✈️' });
   };
 
   const getFlightCoordinates = () => {
@@ -155,10 +175,10 @@ export default function AviatorCasinoPage() {
               <Users size={14} className="text-red-500" /> Active Pool
             </span>
             <span className="bg-slate-900 px-2 py-0.5 rounded-md text-[10px] text-green-400 font-mono font-bold">
-              KSh Balance: {
+              Balance: {
                 user?.balance !== undefined && !isNaN(Number(user.balance))
-                  ? Number(user.balance).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                  : '0.00'
+                  ? `${currencySymbol}${Number(user.balance).toLocaleString(localeFormat, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : `${currencySymbol}0.00`
               }
             </span>
           </div>
@@ -266,7 +286,7 @@ export default function AviatorCasinoPage() {
               </div>
 
               <div className="grid grid-cols-4 gap-1.5 text-[11px] font-black text-slate-400">
-                {[100, 200, 500, 10000].map((amt) => (
+                {presetOptions.map((amt) => (
                   <button
                     key={amt}
                     type="button"
@@ -274,7 +294,7 @@ export default function AviatorCasinoPage() {
                     onClick={() => handleApplyPresetAmount(1, amt)}
                     className="bg-slate-900 hover:bg-slate-800 border border-slate-800 py-1 px-0.5 rounded transition font-mono disabled:opacity-30"
                   >
-                    {amt.toLocaleString()}
+                    {currencySymbol}{amt.toLocaleString()}
                   </button>
                 ))}
               </div>
@@ -285,7 +305,7 @@ export default function AviatorCasinoPage() {
                   className="w-full bg-[#d97706] hover:bg-[#b45309] text-white text-base font-black uppercase py-3.5 rounded-xl shadow-md"
                 >
                   <span className="block text-[10px] tracking-widest text-amber-200">Cash Out</span>
-                  {(parseFloat(stakeOne) * (gameState.multiplier || 1.0)).toFixed(2)} KES
+                  {currencySymbol}{(parseFloat(stakeOne) * (gameState.multiplier || 1.0)).toFixed(2)} {currencyCode}
                 </button>
               ) : (
                 <button
@@ -299,7 +319,7 @@ export default function AviatorCasinoPage() {
                         : 'bg-[#22c55e] hover:bg-[#16a34a] text-white shadow-lg'
                   }`}
                 >
-                  {isQueuedOne ? 'Waiting for Flight...' : hasBetOne ? 'Bet Placed' : `Bet ${parseFloat(stakeOne).toFixed(2)} KES`}
+                  {isQueuedOne ? 'Waiting for Flight...' : hasBetOne ? 'Bet Placed' : `Bet ${currencySymbol}${parseFloat(stakeOne).toFixed(2)} ${currencyCode}`}
                 </button>
               )}
             </div>
@@ -340,7 +360,7 @@ export default function AviatorCasinoPage() {
               </div>
 
               <div className="grid grid-cols-4 gap-1.5 text-[11px] font-black text-slate-400">
-                {[100, 200, 500, 10000].map((amt) => (
+                {presetOptions.map((amt) => (
                   <button
                     key={amt}
                     type="button"
@@ -348,7 +368,7 @@ export default function AviatorCasinoPage() {
                     onClick={() => handleApplyPresetAmount(2, amt)}
                     className="bg-slate-900 hover:bg-slate-800 border border-slate-800 py-1 px-0.5 rounded transition font-mono disabled:opacity-30"
                   >
-                    {amt.toLocaleString()}
+                    {currencySymbol}{amt.toLocaleString()}
                   </button>
                 ))}
               </div>
@@ -359,7 +379,7 @@ export default function AviatorCasinoPage() {
                   className="w-full bg-[#d97706] hover:bg-[#b45309] text-white text-base font-black uppercase py-3.5 rounded-xl shadow-md"
                 >
                   <span className="block text-[10px] tracking-widest text-amber-200">Cash Out</span>
-                  {(parseFloat(stakeTwo) * (gameState.multiplier || 1.0)).toFixed(2)} KES
+                  {currencySymbol}{(parseFloat(stakeTwo) * (gameState.multiplier || 1.0)).toFixed(2)} {currencyCode}
                 </button>
               ) : (
                 <button
@@ -373,7 +393,7 @@ export default function AviatorCasinoPage() {
                         : 'bg-[#22c55e] hover:bg-[#16a34a] text-white shadow-lg'
                   }`}
                 >
-                  {isQueuedTwo ? 'Waiting for Flight...' : hasBetTwo ? 'Bet Placed' : `Bet ${parseFloat(stakeTwo).toFixed(2)} KES`}
+                  {isQueuedTwo ? 'Waiting for Flight...' : hasBetTwo ? 'Bet Placed' : `Bet ${currencySymbol}${parseFloat(stakeTwo).toFixed(2)} {currencyCode}`}
                 </button>
               )}
             </div>

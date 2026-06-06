@@ -45,3 +45,9 @@ celery -A api worker -l info -P eventlet
 
 .\venv\Scripts\activate
 celery -A api beat -l info
+
+###running the backeend
+
+python -m daphne -b 127.0.0.1 -p 8000 api.asgi:application
+
+python manage.py run_crash_engine

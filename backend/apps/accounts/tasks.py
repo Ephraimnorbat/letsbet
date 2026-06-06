@@ -1,17 +1,21 @@
+# account/tasks.py
+
 from celery import shared_task
 from django.core.cache import cache
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import requests
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from .models import Currency
 
 @shared_task
 def update_exchange_rates():
     """
-    Update exchange rates from free API
-    Base currency: KES (Kenyan Shilling)
+    Update global exchange rates from API.
+    Base API Currency: KES (1 KES = X foreign currency units)
+    Database requirement: exchange_rate_to_kES (1 foreign currency unit = X KES)
     """
     try:
-        # Using free budget.org API
         url = 'https://api.budjet.org/fiat/KES'
         response = requests.get(url, timeout=30)
         
@@ -19,42 +23,74 @@ def update_exchange_rates():
             data = response.json()
             rates = data.get('rates', {})
             
-            # Update each currency's exchange rate
             updated_count = 0
-            for currency_code, rate in rates.items():
+            channel_layer = get_channel_layer()
+            
+            # Dictionary to store formatted database representations for cache storage
+            cached_db_rates = {}
+
+            for currency_code, rate_value in rates.items():
                 try:
-                    currency = Currency.objects.get(code=currency_code)
-                    # Convert rate (1 KES = X currency) to (1 currency = X KES)
-                    exchange_rate = Decimal(1 / rate) if rate > 0 else Decimal(1)
-                    currency.exchange_rate_to_kES = exchange_rate
+                    # Parse the raw API value safely
+                    rate = Decimal(str(rate_value))
+                    if rate <= 0:
+                        continue
+                        
+                    currency = Currency.objects.get(code=currency_code.upper())
+                    
+                    # Convert (1 KES = X foreign currency) to (1 foreign currency = X KES)
+                    # Example: If 1 KES = 0.0076 USD, then 1 USD = (1 / 0.0076) = 131.57 KES
+                    exchange_rate_to_kes = Decimal('1') / rate
+                    
+                    currency.exchange_rate_to_kES = exchange_rate_to_kes
                     currency.save()
+                    
                     updated_count += 1
+                    cached_db_rates[currency.code] = float(exchange_rate_to_kes)
+
+                    # ⚡ Real-Time Broadcast: Stream the updated rate to connected clients
+                    if channel_layer:
+                        async_to_sync(channel_layer.group_send)(
+                            'currency_updates',
+                            {
+                                'type': 'currency_update',
+                                'currency': currency.code,
+                                'rate': float(exchange_rate_to_kes),
+                                'symbol': currency.symbol
+                            }
+                        )
                 except Currency.DoesNotExist:
                     continue
+                except (InvalidOperation, ZeroDivisionError):
+                    continue
             
-            # Cache the rates for quick access
-            cache.set('exchange_rates', rates, timeout=3600)  # Cache for 1 hour
+            # Cache the actual converted rates (relative to 1 Unit = X KES) for instant backend access
+            cache.set('exchange_rates', cached_db_rates, timeout=3600)
+            cache.set('exchange_rates_timestamp', timezone.now().isoformat(), timeout=3600)
             
-            return f"Updated {updated_count} exchange rates"
+            return f"Successfully updated and broadcasted {updated_count} global exchange rates."
         else:
-            return f"Failed to fetch exchange rates: {response.status_code}"
+            return f"Failed to fetch exchange rates. HTTP Status: {response.status_code}"
             
     except Exception as e:
-        return f"Error updating exchange rates: {str(e)}"
+        return f"Error encountered while running exchange rate daemon: {str(e)}"
+
 
 @shared_task
-def convert_amount(amount, from_currency_code, to_currency_code):
+def convert_amount_task(amount, from_currency_code, to_currency_code):
     """
-    Convert amount between currencies
+    Celery task wrapper to perform currency conversions across async workers.
     """
     try:
-        from_currency = Currency.objects.get(code=from_currency_code)
-        to_currency = Currency.objects.get(code=to_currency_code)
+        from_curr = Currency.objects.get(code=from_currency_code.upper())
+        to_curr = Currency.objects.get(code=to_currency_code.upper())
         
-        # Convert to KES first, then to target currency
-        amount_in_kES = amount * from_currency.exchange_rate_to_kES
-        converted_amount = amount_in_kES / to_currency.exchange_rate_to_kES
+        amount_decimal = Decimal(str(amount))
         
-        return float(converted_amount)
+        # Convert foreign asset value into KES value pool, then divide into target currency space
+        amount_in_kes = amount_decimal * from_curr.exchange_rate_to_kES
+        converted_amount = amount_in_kes / to_curr.exchange_rate_to_kES
+        
+        return float(round(converted_amount, 4))
     except Currency.DoesNotExist:
         return None

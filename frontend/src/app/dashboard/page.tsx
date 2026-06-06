@@ -5,7 +5,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { useAuthStore } from '@/store/authStore';
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
-import MatchCard from '@/components/betting/MatchCard';
+import MatchCard from '@/components/matches/MatchCard';
 import { motion } from 'framer-motion';
 import { Wallet, Trophy, TrendingUp, LayoutGrid } from 'lucide-react';
 

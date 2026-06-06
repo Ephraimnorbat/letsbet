@@ -6,6 +6,7 @@ import {
   PlusCircle, MinusCircle, History, ArrowUpRight, ArrowDownLeft, 
   Wallet as WalletIcon, CheckCircle2, Clock, Landmark, Copy, ExternalLink 
 } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import toast from 'react-hot-toast';
@@ -20,6 +21,7 @@ interface PaymentInfo {
 }
 
 export default function WalletPage() {
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('usdttrc20'); 
@@ -29,9 +31,23 @@ export default function WalletPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
 
+  // Dynamic currency states initialized to safe empty values
+  const [currencySymbol, setCurrencySymbol] = useState<string>('');
+  const [currencyCode, setCurrencyCode] = useState<string>('');
+
   useEffect(() => {
     fetchWalletData();
   }, []);
+
+  // Dynamically resolve currency details straight from context profile response
+  useEffect(() => {
+    if (user) {
+      const symbol = user.currency_details?.symbol || user.country_details?.default_currency_details?.symbol || '';
+      const code = user.currency_details?.code || user.country_details?.default_currency_details?.code || '';
+      setCurrencySymbol(symbol);
+      setCurrencyCode(code);
+    }
+  }, [user]);
 
   const fetchWalletData = async () => {
     try {
@@ -94,13 +110,17 @@ export default function WalletPage() {
           <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 shadow-xl relative overflow-hidden">
             <div className="relative z-10">
               <p className="text-blue-100 text-sm mb-1 font-medium">Real Balance</p>
-              <h2 className="text-4xl font-bold text-white">KSh {Number(balance.balance).toLocaleString()}</h2>
+              <h2 className="text-4xl font-bold text-white font-mono" dir="ltr">
+                {currencySymbol ? `${currencySymbol} ` : ''}{Number(balance.balance).toLocaleString()}
+              </h2>
             </div>
             <WalletIcon className="absolute right-[-5%] bottom-[-5%] w-24 h-24 text-white/10" />
           </motion.div>
           <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
             <p className="text-slate-500 text-sm mb-1 font-medium">Bonus Balance</p>
-            <h2 className="text-4xl font-bold text-purple-500">KSh {Number(balance.bonus).toLocaleString()}</h2>
+            <h2 className="text-4xl font-bold text-purple-500 font-mono" dir="ltr">
+              {currencySymbol ? `${currencySymbol} ` : ''}{Number(balance.bonus).toLocaleString()}
+            </h2>
           </motion.div>
         </div>
 
@@ -127,7 +147,9 @@ export default function WalletPage() {
                 {!paymentInfo ? (
                   <>
                     <div>
-                      <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Deposit Amount (USD Equiv)</label>
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">
+                        Deposit Amount {currencyCode ? `(${currencyCode})` : ''}
+                      </label>
                       <input
                         type="number"
                         value={amount}
@@ -162,15 +184,12 @@ export default function WalletPage() {
                     <div className="flex justify-center"><CheckCircle2 className="w-12 h-12 text-green-500" /></div>
                     <h3 className="text-lg font-bold text-white">Send Exactly</h3>
                     
-                    {/* Fixed: Used pay_amount and pay_currency with optional chaining */}
-                    <p className="text-3xl font-mono text-blue-400 font-bold">
+                    <p className="text-3xl font-mono text-blue-400 font-bold" dir="ltr">
                         {paymentInfo?.pay_amount} {paymentInfo?.pay_currency?.toUpperCase()}
                     </p>
                     
                     <div className="mt-4 p-4 bg-slate-900 rounded-xl border border-slate-800 break-all relative text-left">
                       <p className="text-xs text-slate-500 mb-2 font-bold uppercase">Destination Address</p>
-                      
-                      {/* Fixed: Used pay_address */}
                       <p className="text-sm font-mono text-white pr-10">{paymentInfo?.pay_address}</p>
                       
                       <button 
@@ -205,7 +224,9 @@ export default function WalletPage() {
             {activeTab === 'withdraw' && (
               <motion.div key="withdraw" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 <div>
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Withdrawal Amount (KSh)</label>
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">
+                    Withdrawal Amount {currencyCode ? `(${currencyCode})` : ''}
+                  </label>
                   <input
                     type="number"
                     value={amount}
@@ -215,7 +236,7 @@ export default function WalletPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">M-Pesa / Account Details</label>
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 block">Account Details / ID</label>
                   <div className="relative">
                     <Landmark className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                     <input
@@ -223,7 +244,7 @@ export default function WalletPage() {
                       value={account}
                       onChange={(e) => setAccount(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-4 text-white outline-none"
-                      placeholder="e.g. 2547XXXXXXXX"
+                      placeholder="Account reference or identification info"
                     />
                   </div>
                 </div>
@@ -254,8 +275,8 @@ export default function WalletPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className={`font-mono font-bold ${tx.transaction_type === 'credit' ? 'text-green-500' : 'text-red-500'}`}>
-                          {tx.transaction_type === 'credit' ? '+' : '-'} {Number(tx.amount).toLocaleString()}
+                        <p className={`font-mono font-bold ${tx.transaction_type === 'credit' ? 'text-green-500' : 'text-red-500'}`} dir="ltr">
+                          {tx.transaction_type === 'credit' ? '+' : '-'} {currencySymbol ? `${currencySymbol} ` : ''}{Number(tx.amount).toLocaleString()}
                         </p>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                           tx.status === 'completed' ? 'bg-green-500/10 text-green-500' : 

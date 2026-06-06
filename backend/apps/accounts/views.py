@@ -1,11 +1,15 @@
+# account/views.py
+
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django.utils import timezone
+from rest_framework.generics import ListAPIView
 from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from django.utils.encoding import force_str
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -14,7 +18,6 @@ from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import check_password
-
 
 from .helpers import resolve_user_currency
 from .utils import generate_verification_token
@@ -29,22 +32,27 @@ from .serializers import (
 User = get_user_model()
 
 
-# New views for countries and currencies
 class CountryListView(generics.ListAPIView):
     """
-    List all active countries
+    List all active countries - completely unpaginated for clean dropdown population
     """
-    queryset = Country.objects.filter(is_active=True)
+    queryset = Country.objects.filter(is_active=True).order_by('name')
     serializer_class = CountrySerializer
     permission_classes = [AllowAny]
+    pagination_class = None  # Explicitly kills pagination context for frontend drops
+    throttle_classes = ()
+
 
 class CurrencyListView(generics.ListAPIView):
     """
-    List all active currencies
+    List all active currencies - completely unpaginated for clean dropdown population
     """
-    queryset = Currency.objects.filter(is_active=True)
+    queryset = Currency.objects.filter(is_active=True).order_by('code')
     serializer_class = CurrencySerializer
     permission_classes = [AllowAny]
+    pagination_class = None  # Explicitly kills pagination context for frontend drops
+    throttle_classes = ()
+
 
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
@@ -53,12 +61,10 @@ class RegisterView(generics.CreateAPIView):
     def perform_create(self, serializer):
         user = serializer.save()
 
-        # 🔥 Ensure user is not verified
         user.is_verified = False
         user.save()
 
         uid, token = generate_verification_token(user)
-
         verification_link = f"http://localhost:3000/verify/{uid}/{token}"
 
         send_mail(
@@ -68,6 +74,8 @@ class RegisterView(generics.CreateAPIView):
             [user.email],
             fail_silently=False,
         )
+
+
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -80,39 +88,31 @@ class LoginView(APIView):
 
         try:
             user = User.objects.get(email=email)
-
             if not check_password(password, user.password):
                 return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-
         except User.DoesNotExist:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Account checks
         if not user.is_active:
             return Response({"error": "Account is disabled"}, status=status.HTTP_403_FORBIDDEN)
 
         if not user.is_verified:
             return Response({"error": "Please verify your email"}, status=status.HTTP_403_FORBIDDEN)
 
-        # Login history
         LoginHistory.objects.create(
             user=user,
             ip_address=request.META.get('REMOTE_ADDR'),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
         )
 
-        # ✅ FIXED: Centralized currency logic
+        # Fallback evaluation via your helper module
         currency = resolve_user_currency(user.country, user.preferred_currency)
 
-        # persist if missing
         if not user.preferred_currency:
             user.preferred_currency = currency
             user.save()
 
-        # Tokens
         refresh = RefreshToken.for_user(user)
-
-        # Ensure profile exists
         UserProfile.objects.get_or_create(user=user)
 
         return Response({
@@ -125,30 +125,39 @@ class LoginView(APIView):
                 "email": user.email,
                 "currency_symbol": currency.symbol,
                 "exchange_rate": float(currency.exchange_rate_to_kES),
-                "currency_code": currency.code,  # ✅ add this (very useful frontend)
+                "currency_code": currency.code,  
             }
         }, status=status.HTTP_200_OK)
+
 
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, uid, token):
+    def post(self, request, *args, **kwargs):
+        uidb64 = request.data.get('uidb64')
+        token = request.data.get('token')
+
+        if not uidb64 or not token:
+            return Response({'error': 'Missing verification parameters.'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            uid = urlsafe_base64_decode(uid).decode()
+            # Decode the user ID from base64
+            uid = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
 
+        # Verify the token against your token generator logic
+        # (Replace default_token_generator if you use a custom one inside generate_verification_token)
+        if user is not None and default_token_generator.check_token(user, token):
             if user.is_verified:
-                return Response({'message': 'Account already verified'})
-
-            if default_token_generator.check_token(user, token):
-                user.is_verified = True
-                user.save()
-                return Response({'message': 'Email verified successfully'})
-            else:
-                return Response({'error': 'Invalid token'}, status=400)
-
-        except Exception:
-            return Response({'error': 'Invalid request'}, status=400)
+                return Response({'message': 'Account already verified. Please log in.'}, status=status.HTTP_200_OK)
+            
+            user.is_verified = True
+            user.save()
+            return Response({'message': 'Account successfully verified!'}, status=status.HTTP_200_OK)
+        
+        return Response({'error': 'Invalid or expired verification token.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -159,29 +168,34 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
     
     def update(self, request, *args, **kwargs):
+        # Support partial updates (PATCH) smoothly
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
-        # Handle country update
-        if 'country_id' in request.data:
+        # Handle phone numbers and basic field overrides directly from request payload safely
+        if 'phone_number' in request.data:
+            instance.phone_number = request.data.get('phone_number')
+        if 'date_of_birth' in request.data:
+            instance.date_of_birth = request.data.get('date_of_birth')
+
+        # Handle relational items safely
+        if 'country_id' in request.data and request.data['country_id']:
             try:
                 country = Country.objects.get(id=request.data['country_id'], is_active=True)
                 instance.country = country
-                # Auto-update currency if not specified
-                if 'preferred_currency_id' not in request.data and country.default_currency:
-                    instance.preferred_currency = country.default_currency
             except Country.DoesNotExist:
-                return Response({'error': 'Invalid country'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Invalid country selection'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Handle currency update
-        if 'preferred_currency_id' in request.data:
+        if 'preferred_currency_id' in request.data and request.data['preferred_currency_id']:
             try:
                 currency = Currency.objects.get(id=request.data['preferred_currency_id'], is_active=True)
                 instance.preferred_currency = currency
             except Currency.DoesNotExist:
-                return Response({'error': 'Invalid currency'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Invalid currency selection'}, status=status.HTTP_400_BAD_REQUEST)
         
         instance.save()
+        
+        # If your UserProfile model fields need changes, update them here via request.data.get('profile')
         
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
@@ -192,18 +206,13 @@ class UpdateProfileView(APIView):
     def put(self, request):
         user = request.user
         
-        # Handle country update
         if 'country_id' in request.data:
             try:
                 country = Country.objects.get(id=request.data['country_id'], is_active=True)
                 user.country = country
-                # Auto-update currency if not specified
-                if 'preferred_currency_id' not in request.data and country.default_currency:
-                    user.preferred_currency = country.default_currency
             except Country.DoesNotExist:
                 return Response({'error': 'Invalid country'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Handle currency update
         if 'preferred_currency_id' in request.data:
             try:
                 currency = Currency.objects.get(id=request.data['preferred_currency_id'], is_active=True)
@@ -212,11 +221,9 @@ class UpdateProfileView(APIView):
                 return Response({'error': 'Invalid currency'}, status=status.HTTP_400_BAD_REQUEST)
         
         user_serializer = UserSerializer(user, data=request.data, partial=True)
-        
         if user_serializer.is_valid():
             user_serializer.save()
             
-            # Update profile if data provided
             if 'profile' in request.data:
                 profile, created = UserProfile.objects.get_or_create(user=user)
                 profile_serializer = UserProfileSerializer(profile, data=request.data['profile'], partial=True)
@@ -227,45 +234,38 @@ class UpdateProfileView(APIView):
                 'user': user_serializer.data,
                 'message': 'Profile updated successfully'
             })
-        
         return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
-        
         if serializer.is_valid():
             user = request.user
-            
-            # Check old password
             if not user.check_password(serializer.data['old_password']):
                 return Response({'old_password': 'Wrong password'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Set new password
             user.set_password(serializer.data['new_password'])
             user.save()
-            
             return Response({'message': 'Password changed successfully'})
-        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         return Response({'message': 'Logged out successfully'})
-        
+
+
 class UserStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        
-        # Get user's currency symbol
         currency = resolve_user_currency(user.country, user.preferred_currency)
-
-        currency_symbol = currency.symbol
         
         stats = {
             'total_bets': user.total_bets,
@@ -273,50 +273,38 @@ class UserStatsView(APIView):
             'total_losses': user.total_losses,
             'win_rate': round((user.total_wins / user.total_bets * 100), 2) if user.total_bets > 0 else 0,
             'total_profit': float(user.total_profit),
-            'currency_symbol': currency_symbol,
+            'currency_symbol': currency.symbol,
             'member_since': user.date_joined,
             'country': {
                 'name': user.country.name if user.country else None,
                 'code': user.country.code if user.country else None,
             },
             'preferred_currency': {
-                'code': user.preferred_currency.code if user.preferred_currency else None,
-                'symbol': user.preferred_currency.symbol if user.preferred_currency else None,
-                'name': user.preferred_currency.name if user.preferred_currency else None,
+                'code': currency.code,
+                'symbol': currency.symbol,
+                'name': currency.name,
             }
         }
-        
         return Response(stats)
 
+
 class UpdateUserCountryCurrencyView(APIView):
-    """
-    Separate view for updating user's country and currency preferences
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
         country_id = request.data.get('country_id')
         currency_id = request.data.get('currency_id')
-        
         response_data = {}
         
-        # Update country
         if country_id:
             try:
                 country = Country.objects.get(id=country_id, is_active=True)
                 user.country = country
                 response_data['country'] = CountrySerializer(country).data
-                
-                # Auto-set currency to country's default if not specified
-                if not currency_id and country.default_currency:
-                    user.preferred_currency = country.default_currency
-                    response_data['currency'] = CurrencySerializer(country.default_currency).data
-                    
             except Country.DoesNotExist:
                 return Response({'error': 'Invalid country'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Update currency
         if currency_id:
             try:
                 currency = Currency.objects.get(id=currency_id, is_active=True)
@@ -326,39 +314,31 @@ class UpdateUserCountryCurrencyView(APIView):
                 return Response({'error': 'Invalid currency'}, status=status.HTTP_400_BAD_REQUEST)
         
         user.save()
-        
         return Response({
             'message': 'Preferences updated successfully',
             **response_data
         }, status=status.HTTP_200_OK)
 
+
 class GetUserPreferencesView(APIView):
-    """
-    Get user's current country and currency preferences
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        
         return Response({
             'country': CountrySerializer(user.country).data if user.country else None,
             'currency': CurrencySerializer(user.preferred_currency).data if user.preferred_currency else None,
             'available_countries': CountrySerializer(Country.objects.filter(is_active=True), many=True).data,
             'available_currencies': CurrencySerializer(Currency.objects.filter(is_active=True), many=True).data,
         })
-    
 
 
 class ExchangeRatesView(APIView):
     permission_classes = [AllowAny]
     
     def get(self, request):
-        # Try to get cached rates
         rates = cache.get('exchange_rates')
-        
         if not rates:
-            # Trigger async update and return loading status
             update_exchange_rates.delay()
             return Response({
                 'status': 'updating',
@@ -366,7 +346,6 @@ class ExchangeRatesView(APIView):
             }, status=status.HTTP_202_ACCEPTED)
         
         base_currency = request.query_params.get('base', 'KES')
-        
         return Response({
             'base': base_currency,
             'rates': rates,

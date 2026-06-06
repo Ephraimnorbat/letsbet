@@ -24,7 +24,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [currencySymbol, setCurrencySymbol] = useState<string>('KSh');
+
+  // Dynamic state values initialized empty to completely prevent hardcoding
+  const [currencySymbol, setCurrencySymbol] = useState<string>('');
+  const [currencyCode, setCurrencyCode] = useState<string>('');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -34,10 +37,20 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Fetch wallet balance when user is logged in
-// Fetch wallet balance only if we actually have a user AND a token
+  // Sync state values dynamically straight from your backend response keys
   useEffect(() => {
-    const token = localStorage.getItem('access_token'); // Or check your auth store
+    if (user) {
+      const symbol = user.currency_details?.symbol || user.country_details?.default_currency_details?.symbol || '';
+      const code = user.currency_details?.code || user.country_details?.default_currency_details?.code || '';
+      
+      setCurrencySymbol(symbol);
+      setCurrencyCode(code);
+    }
+  }, [user]);
+
+  // Fetch wallet balance when user is logged in
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     
     if (user && user.id && token) {
       fetchWalletBalance();
@@ -50,17 +63,16 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   const [isFetching, setIsFetching] = useState(false);
 
   const fetchWalletBalance = async () => {
-    // Prevent multiple simultaneous calls
     if (isFetching || !user) return; 
 
     setIsFetching(true);
     try {
       const response = await apiClient.get(API_ENDPOINTS.wallet.balance);
-      setWalletBalance(response.balance);
+      const freshBalance = response?.balance !== undefined ? response.balance : (response?.data?.balance ?? null);
+      setWalletBalance(freshBalance);
     } catch (error) {
       if (error === 'AUTH_EXPIRED') return;
       
-      // If we get throttled (429), stop the interval temporarily
       if ((error as any).status === 429) {
         console.warn("Throttled by server. Slowing down...");
       }
@@ -78,13 +90,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     { name: 'Results', href: '/results', active: pathname === '/results' },
   ];
 
-  // Safely get user display name
   const getUserDisplayName = () => {
     if (!user) return '';
     return user.username || user.email?.split('@')[0] || 'User';
   };
 
-  // Safely get user initial
   const getUserInitial = () => {
     const displayName = getUserDisplayName();
     return displayName.charAt(0).toUpperCase();
@@ -166,7 +176,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
             {user ? (
               <>
-                {/* Wallet Section */}
+                {/* Desktop Wallet Balance Display */}
                 <Link href="/wallet">
                   <motion.div
                     whileHover={{ scale: 1.02 }}
@@ -176,8 +186,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                     <Wallet className="w-4 h-4 text-green-400" />
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-400">Balance</span>
-                      <span className="text-sm font-bold text-green-400">
-                      {currencySymbol}{walletBalance !== null ? Number(walletBalance).toFixed(2) : '0.00'}                      </span>
+                      <span className="text-sm font-bold text-green-400" dir="ltr">
+                        {currencySymbol ? `${currencySymbol} ` : ''}{walletBalance !== null ? Number(walletBalance).toFixed(2) : '0.00'}
+                      </span>
                     </div>
                   </motion.div>
                 </Link>
@@ -197,7 +208,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                     </div>
                     <div className="hidden md:block text-left">
                       <div className="text-sm font-medium">{getUserDisplayName()}</div>
-                      <div className="text-xs text-gray-400">{user.preferred_currency?.code || 'KES'}</div>
+                      {currencyCode && (
+                        <div className="text-xs text-gray-400 font-mono font-semibold uppercase">{currencyCode}</div>
+                      )}
                     </div>
                     <ChevronDown className="w-4 h-4 hidden md:block" />
                   </motion.button>
@@ -231,8 +244,8 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                             <Wallet className="w-4 h-4" />
                             <span className="text-sm">Wallet</span>
                             {walletBalance !== null && (
-                              <span className="ml-auto text-xs text-green-400">
-                                {currencySymbol}{Number(walletBalance).toFixed(2)}
+                              <span className="ml-auto text-xs text-green-400 font-mono" dir="ltr">
+                                {currencySymbol ? `${currencySymbol} ` : ''}{Number(walletBalance).toFixed(2)}
                               </span>
                             )}
                           </Link>
@@ -283,7 +296,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         </div>
       </div>
 
-      {/* Mobile Wallet Bar (visible only on mobile when logged in) */}
+      {/* Mobile Wallet Bar Display */}
       {user && (
         <div className="lg:hidden bg-slate-800/50 backdrop-blur-sm border-t border-slate-700/50">
           <div className="container mx-auto px-4 py-2">
@@ -293,8 +306,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                 <span className="text-sm text-gray-300">Wallet Balance</span>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="text-sm font-bold text-green-400">
-                {currencySymbol}{walletBalance !== null ? Number(walletBalance).toFixed(2) : '0.00'}                </span>
+                <span className="text-sm font-bold text-green-400" dir="ltr">
+                  {currencySymbol ? `${currencySymbol} ` : ''}{walletBalance !== null ? Number(walletBalance).toFixed(2) : '0.00'}
+                </span>
                 <ChevronDown className="w-4 h-4 text-gray-400" />
               </div>
             </Link>

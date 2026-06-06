@@ -72,10 +72,10 @@ class User(AbstractUser):
         return self.email
 
     def save(self, *args, **kwargs):
-        # Auto-set preferred currency from country if not specified
-        if not self.preferred_currency and self.country and self.country.default_currency:
-            self.preferred_currency = self.country.default_currency
-        super().save(*args, **kwargs)
+            # Only auto-set currency from country if the user has absolutely NO preference specified
+            if not self.preferred_currency and self.country and self.country.default_currency:
+                self.preferred_currency = self.country.default_currency
+            super().save(*args, **kwargs)
 
 # Your existing UserProfile remains the same (country field here is string, not foreign key)
 class UserProfile(models.Model):
