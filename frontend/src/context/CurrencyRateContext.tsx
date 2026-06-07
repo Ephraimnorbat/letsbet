@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from '@/store/authStore'; // Path to your auth state hook
+import { useAuthStore } from '@/store/authStore'; // Path to your auth state hook
 
 interface RateDetails {
   rate: number;

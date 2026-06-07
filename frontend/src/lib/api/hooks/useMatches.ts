@@ -5,11 +5,13 @@ import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 
 // ✅ LIVE MATCHES HOOK
-export const useLiveMatches = (sportKey: string = 'upcoming') => {
+export const useLiveMatches = (sportKey?: string) => {
+  const activeKey = sportKey ?? 'upcoming';
+
   return useQuery({
-    queryKey: ['liveMatches', sportKey],
-    queryFn: () => apiClient.get(API_ENDPOINTS.matches.scores(sportKey)),
-    refetchInterval: 30000, // auto refresh every 30s
+    queryKey: ['liveMatches', activeKey],
+    queryFn: () => apiClient.get(API_ENDPOINTS.matches.scores(activeKey)),
+    refetchInterval: 30000, 
   });
 };
 
@@ -21,7 +23,26 @@ export const useUpcomingMatches = (sportKey: string = 'upcoming') => {
   });
 };
 
-// ✅ LINEUP HOOKS (Now correctly using your central config)
+// ✅ MATCH DETAILS HOOK
+export const useMatchDetails = (matchId: string) => {
+  return useQuery({
+    queryKey: ['matchDetails', matchId],
+    queryFn: () => apiClient.get(API_ENDPOINTS.matches.details ? API_ENDPOINTS.matches.details(matchId) : `/api/matches/${matchId}/`),
+    enabled: !!matchId,
+  });
+};
+
+// ✅ FIXED: MATCH STATISTICS HOOK
+export const useMatchStatistics = (matchId: string) => {
+  return useQuery({
+    queryKey: ['matchStatistics', matchId],
+    // Updated ternary from .statistics to check and evaluate your valid configured .stats() method wrapper
+    queryFn: () => apiClient.get((API_ENDPOINTS.matches as any).stats ? (API_ENDPOINTS.matches as any).stats(matchId) : `/api/matches/${matchId}/statistics/`),
+    enabled: !!matchId,
+  });
+};
+
+// ✅ LINEUP HOOKS
 export const useHomeTeamLineup = (matchId: string) => {
   return useQuery({
     queryKey: ['match-lineup', matchId, 'home'],

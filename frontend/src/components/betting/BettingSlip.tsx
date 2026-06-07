@@ -130,22 +130,25 @@ function BettingSlipContent({
   }, [selections.length]);
 
   const handleGenerateShareCode = async () => {
-    setIsSharing(true);
-    try {
-      const response = await apiClient.post('/betting/betslip/share/', {
-        selections: selections
-      });
-      if (response && response.share_code) {
-        setShareCode(response.share_code);
-        toast.success('Booking code generated successfully!');
+      setIsSharing(true);
+      try {
+        const response = await apiClient.post('/betting/betslip/share/', {
+          selections: selections
+        });
+        
+        // ✅ FIXED: Unbox data payload cleanly from the AxiosWrapper object
+        const resData = (response as any)?.data || response;
+        
+        if (resData && resData.share_code) {
+          setShareCode(resData.share_code);
+          toast.success('Booking code generated successfully!');
+        }
+      } catch (err) {
+        toast.error('Failed to create booking parameter payload.');
+      } finally {
+        setIsSharing(false);
       }
-    } catch (err) {
-      toast.error('Failed to create booking parameter payload.');
-    } finally {
-      setIsSharing(false);
-    }
-  };
-
+    };
   const handleCopyToClipboard = () => {
     if (!shareCode) return;
     const shareUrl = `${window.location.origin}?code=${shareCode}`;
@@ -218,7 +221,7 @@ function BettingSlipContent({
 
         <button
           onClick={onPlaceBet}
-          disabled={isLoading || (stake * exchangeRate) < 1000}
+          disabled={isLoading || stake < minStakeUserCurrency}
           className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 text-white py-4 rounded-xl font-black transition-all shadow-lg shadow-blue-900/20"
         >
           {isLoading ? 'PLACING BET...' : 'PLACE BET'}

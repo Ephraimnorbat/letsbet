@@ -57,12 +57,13 @@ export default function AviatorCasinoPage() {
       if (isInitialFetchDone.current || !user) return;
       isInitialFetchDone.current = true;
       try {
-        const response = await apiClient.get('/wallet/balance/'); 
-        if (response && response.balance !== undefined) {
-          useAuthStore.setState((state) => ({
-            user: state.user ? { ...state.user, balance: response.balance } : null
-          }));
-        }
+      const { data } = await apiClient.get('/wallet/balance/');
+
+      if (data?.balance !== undefined) {
+        useAuthStore.setState((state) => ({
+          user: state.user ? { ...state.user, balance: data.balance } : null
+        }));
+      }
       } catch (error) {
         console.error('Initial balance fetch failed:', error);
       }

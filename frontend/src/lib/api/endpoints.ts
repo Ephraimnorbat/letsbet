@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
     updateProfile: '/auth/profile/update/',
     changePassword: '/auth/change-password/',
     updatePreferences: '/auth/preferences/update/',
+    verify: '/auth/verify/',
   },
   
   // Country and Currency endpoints

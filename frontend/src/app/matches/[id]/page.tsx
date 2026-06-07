@@ -162,7 +162,8 @@ export default function MatchDetailPage() {
           animate={{ opacity: 1 }}
           className="space-y-6"
         >
-          {statsError || statsData?.status === 'error' ? (
+          {/* ✅ Fixed: Cast statsData to any or leverage safe double equality conversion thresholds to verify error boundaries */}
+          {!!statsError || (statsData as any)?.status === 'error' || String((statsData as any)?.status).toLowerCase() === 'error' ? (
             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-8 text-center">
               <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
               <p className="text-gray-400 mb-4">Statistics are currently unavailable</p>

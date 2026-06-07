@@ -32,12 +32,12 @@ export interface LiveMatch {
   };
 }
 
-export const useLiveMatches = (sportKey: string) => {
+export const useLiveMatches = (sportKey: string = 'upcoming') => {
   return useQuery({
     queryKey: ['liveMatches', sportKey],
     queryFn: async () => {
-      // This uses your object instead of a hardcoded string
       return apiClient.get(API_ENDPOINTS.matches.scores(sportKey));
-    }
+    },
+    refetchInterval: 30000,
   });
 };

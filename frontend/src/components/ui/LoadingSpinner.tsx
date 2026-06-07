@@ -129,8 +129,8 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   );
 };
 
-// iOS-style loading spinner component
-export const iOSActivityIndicator: React.FC<{
+// ✅ FIXED: Capitalized the component declaration name variable to enforce valid React layout semantics
+export const IOSActivityIndicator: React.FC<{
   size?: number;
   color?: string;
 }> = ({ size = 12, color = '#007AFF' }) => {
@@ -194,7 +194,8 @@ export const FullScreenLoading: React.FC<{
         className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-white/30 max-w-sm mx-4"
       >
         <div className="flex flex-col items-center gap-6">
-          <iOSActivityIndicator size={16} />
+          {/* ✅ FIXED: Rendered with PascalCase casing identifier to resolve JSX compilation blocks */}
+          <IOSActivityIndicator size={16} />
           
           <div className="text-center space-y-2">
             <motion.h3

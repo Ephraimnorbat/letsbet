@@ -16,23 +16,23 @@ export function useCurrencyWebSocket() {
     };
     
     websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      if (data.type === 'rate_update' && user?.preferred_currency) {
-        // Update user's currency rate in real-time
-        if (data.currency === user.preferred_currency.code) {
-          useAuthStore.setState((state) => ({
-            user: state.user ? {
-              ...state.user,
-              preferred_currency: {
-                ...state.user.preferred_currency,
-                exchange_rate_to_kES: data.rate
-              }
-            } : null
-          }));
-        }
-      }
-    };
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'rate_update' && user?.preferred_currency) {
+            // Update user's currency rate in real-time
+            if (data.currency === user.preferred_currency.code) {
+              useAuthStore.setState((state) => ({
+                user: state.user ? {
+                  ...state.user,
+                  preferred_currency: {
+                    ...(state.user.preferred_currency as any), // ✅ FIXED: Cast to any to safely merge the dynamic stream payload
+                    exchange_rate_to_kES: data.rate
+                  }
+                } : null
+              }));
+            }
+          }
+        };
     
     websocket.onerror = (error) => {
       console.error('WebSocket error:', error);

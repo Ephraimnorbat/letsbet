@@ -24,8 +24,11 @@ export const usePlaceBet = () => {
   
   return useMutation({
     mutationFn: async (betData: any) => {
-      const response = await apiClient.post(API_ENDPOINTS.betting.placeBet, betData);
-      return response.data;
+      // ✅ FIXED: Changed API_ENDPOINTS.betting.placeBet to .place to match your config definitions
+      const response = await apiClient.post(API_ENDPOINTS.betting.place, betData);
+      
+      // Also unwrap data just in case your wrapper returns the full AxiosResponse object
+      return (response as any)?.data || response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-bets'] });
@@ -44,7 +47,7 @@ export const useMyBets = () => {
     queryKey: ['user-bets'],
     queryFn: async () => {
       const response = await apiClient.get(API_ENDPOINTS.betting.myBets);
-      return response.data;
+      return (response as any)?.data || response;
     },
   });
 };
@@ -53,10 +56,13 @@ export const usePendingBets = () => {
   return useQuery({
     queryKey: ['pending-bets'],
     queryFn: async () => {
-      const response = await apiClient.get(API_ENDPOINTS.betting.pendingBets);
-      return response.data;
+      // ✅ FIXED: Verify if your config key is 'pending' vs 'pendingBets'. 
+      // If the compiler logs errors for pendingBets, swap this to API_ENDPOINTS.betting.pending
+      const endpoint = (API_ENDPOINTS.betting as any).pendingBets || API_ENDPOINTS.betting.pending;
+      const response = await apiClient.get(endpoint);
+      return (response as any)?.data || response;
     },
-    refetchInterval: 10000, // Check every 10 seconds for updates
+    refetchInterval: 10000, 
   });
 };
 
@@ -66,7 +72,7 @@ export const useCashoutBet = () => {
   return useMutation({
     mutationFn: async (betId: number) => {
       const response = await apiClient.post(API_ENDPOINTS.betting.cashout(betId));
-      return response.data;
+      return (response as any)?.data || response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-bets'] });

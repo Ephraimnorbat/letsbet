@@ -30,9 +30,8 @@ export default function ProfilePage() {
   useEffect(() => {
     const initProfilePage = async () => {
       try {
-        // ✅ FIXED: Using your exact backend paths precisely
         const profileEndpoint = '/auth/profile/';
-        const countriesEndpoint = '/auth/countries/'; // Adjust if this lives elsewhere
+        const countriesEndpoint = '/auth/countries/';
 
         // Fetch user data and country configurations cleanly
         const [profileRes, countriesRes] = await Promise.all([
@@ -45,8 +44,12 @@ export default function ProfilePage() {
         // Save to local view state dynamically
         setLocalUser(freshUser);
 
-        // Map country list options safely
-        const cData = Array.isArray(countriesRes) ? countriesRes : countriesRes?.data || countriesRes?.results || [];
+        // ✅ FIXED: Cast countriesRes to any to bypass strict Axios compile-time object layout assertions
+        const responseCountries = countriesRes as any;
+        const cData = Array.isArray(responseCountries) 
+          ? responseCountries 
+          : responseCountries?.data?.results || responseCountries?.data || responseCountries?.results || [];
+          
         setCountriesList(cData);
 
         // Hydrate configuration inputs from your model properties
@@ -70,7 +73,7 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      const updateEndpoint = '/auth/profile/'; // Your API allows PATCH directly to this route
+      const updateEndpoint = '/auth/profile/';
       
       const payload = {
         phone_number: phoneNumber || null,

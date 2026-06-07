@@ -189,36 +189,26 @@ export default function AuthPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch countries and currencies on component mount
-  useEffect(() => {
-      const fetchCountriesAndCurrencies = async () => {
-        try {
-          const [countriesRes, currenciesRes] = await Promise.all([
-            apiClient.get(API_ENDPOINTS.countries.list), // ✅ Utilizing your API_ENDPOINTS configuration
-            apiClient.get(API_ENDPOINTS.currencies.list)  // ✅ Utilizing your API_ENDPOINTS configuration
-          ]);
-          
-          const countriesData = Array.isArray(countriesRes) ? countriesRes : 
-                              countriesRes?.data ? countriesRes.data : 
-                              countriesRes?.results ? countriesRes.results : [];
-          
-          const currenciesData = Array.isArray(currenciesRes) ? currenciesRes : 
-                                currenciesRes?.data ? currenciesRes.data : 
-                                currenciesRes?.results ? currenciesRes.results : [];
-          
-          setCountries(countriesData);
-          setCurrencies(currenciesData);
-        } catch (error) {
-          console.error('Failed to fetch countries/currencies:', error);
-          toast.error('Failed to load countries and currencies');
-        } finally {
-          setLoadingCountries(false);
-        }
-      };
+useEffect(() => {
+  const fetchCountriesAndCurrencies = async () => {
+    try {
+      const [countriesData, currenciesData] = await Promise.all([
+        apiClient.get(API_ENDPOINTS.countries.list),
+        apiClient.get(API_ENDPOINTS.currencies.list)
+      ]);
 
-      fetchCountriesAndCurrencies();
-    }, []);
+      setCountries(Array.isArray(countriesData) ? countriesData : []);
+      setCurrencies(Array.isArray(currenciesData) ? currenciesData : []);
+    } catch (error) {
+      console.error('Failed to fetch countries/currencies:', error);
+      toast.error('Failed to load countries and currencies');
+    } finally {
+      setLoadingCountries(false);
+    }
+  };
 
+  fetchCountriesAndCurrencies();
+}, []);
   // Auto fallback to USD if nothing selected (Acts as your baseline safe option)
     useEffect(() => {
       if (!formData.currencyId && currencies.length > 0) {

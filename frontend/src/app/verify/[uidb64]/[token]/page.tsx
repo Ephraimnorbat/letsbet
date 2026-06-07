@@ -4,8 +4,8 @@ import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { apiClient } from '@/lib/api/client'; // ✅ FIXED: Importing the named lower-case instance
-import { API_ENDPOINTS } from '@/lib/api/endpoints'; // Ensure you import your configurations
+import { apiClient } from '@/lib/api/client';
+import { API_ENDPOINTS } from '@/lib/api/endpoints';
 
 interface VerifyPageProps {
   params: Promise<{
@@ -25,9 +25,8 @@ export default function VerifyEmailPage({ params }: VerifyPageProps) {
   useEffect(() => {
     const verifyEmail = async () => {
       try {
-        // ✅ FIXED: Using the accurate lower-case apiClient instance
-        // If your backend endpoints config dictionary doesn't map auth.verify, replace with '/auth/verify/'
-        const endpoint = API_ENDPOINTS?.auth?.verify || '/auth/verify/'; 
+        // ✅ Clean & Native: Type-safe lookup directly into your config properties
+        const endpoint = API_ENDPOINTS.auth.verify; 
         
         const response = await apiClient.post(endpoint, {
           uidb64: uidb64,
@@ -43,7 +42,6 @@ export default function VerifyEmailPage({ params }: VerifyPageProps) {
       } catch (error: any) {
         setStatus('error');
         
-        // Extract error strings safely from your unified Axios instance return structures
         const serverError = error.response?.data?.error || error.response?.data?.detail;
         
         setStatus('error');

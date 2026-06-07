@@ -22,8 +22,11 @@ export default function ShareParamsListener() {
         // Connects to RetrieveSharedBetslipView on the Django side
         const response = await apiClient.get(`/betting/betslip/load/${code}/`);
         
-        if (response && response.selections) {
-          loadSharedSelections(response.selections);
+        // ✅ FIXED: Safely unwrap data payload properties out of the Axios wrapper
+        const resData = (response as any)?.data || response;
+        
+        if (resData && resData.selections) {
+          loadSharedSelections(resData.selections);
           toast.success('Betslip loaded successfully!', { id: 'import-loader' });
           
           // Clear query params elegantly from screen view

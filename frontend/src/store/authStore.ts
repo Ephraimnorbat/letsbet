@@ -69,35 +69,51 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
 
       login: async (identifier: string, password: string, loginType: 'email' | 'phone' = 'email') => {
-              set({ isLoading: true });
-              try {
-                const loginData = loginType === 'email' 
-                  ? { email: identifier, password }
-                  : { phone: identifier, password };
-                  
-                const response = await apiClient.post(API_ENDPOINTS.auth.login, loginData);
-                
-                // JWT usually returns 'access' and 'refresh'
-                const { token, refresh, user } = response;
-                
-                if (!user || !token) { // Check for 'token' here
-                  throw new Error('Invalid response from server');
-                }
-                                // Store both tokens
-              // Store tokens (Update the key names to match what you extracted)
-              localStorage.setItem('access_token', token); 
-              if (refresh) localStorage.setItem('refresh_token', refresh);
+        set({ isLoading: true });
 
-              set({ user, token: token, isLoading: false });
-                
-                toast.success(`Welcome back, ${user.username || 'User'}!`);
-              } catch (error: any) {
-                set({ isLoading: false });
-                const message = error.response?.data?.detail || error.response?.data?.error || 'Login failed.';
-                toast.error(message);
-                throw error;
-              }
-            },
+        try {
+          const loginData =
+            loginType === 'email'
+              ? { email: identifier, password }
+              : { phone: identifier, password };
+
+          const response = await apiClient.post(API_ENDPOINTS.auth.login, loginData);
+
+          // ✅ HANDLE BOTH API SHAPES SAFELY
+          const data = response?.data ?? response;
+
+          const token = data?.token;
+          const refresh = data?.refresh;
+          const user = data?.user;
+
+          if (!token || !user) {
+            console.log('LOGIN RESPONSE DEBUG:', response);
+            throw new Error('Invalid response from server');
+          }
+
+          localStorage.setItem('access_token', token);
+          if (refresh) localStorage.setItem('refresh_token', refresh);
+
+          set({
+            user,
+            token,
+            isLoading: false
+          });
+
+          toast.success(`Welcome back, ${user.username || 'User'}!`);
+        } catch (error: any) {
+          set({ isLoading: false });
+
+          const message =
+            error.response?.data?.detail ||
+            error.response?.data?.error ||
+            error.message ||
+            'Login failed.';
+
+          toast.error(message);
+          throw error;
+        }
+      },
 
       register: async (userData: RegisterData) => {
         set({ isLoading: true });
@@ -147,11 +163,15 @@ export const useAuthStore = create<AuthState>()(
               }
             },
 
-      updateProfile: async (data: Partial<User>) => {
+updateProfile: async (data: Partial<User>) => {
         set({ isLoading: true });
         try {
           const response = await apiClient.put(API_ENDPOINTS.auth.updateProfile, data);
-          set({ user: response.user, isLoading: false });
+          
+          // ✅ FIXED: Unbox data payload properties out of the Axios wrapper
+          const resData = (response as any)?.data || response;
+          
+          set({ user: resData.user || resData, isLoading: false });
           toast.success('Profile updated successfully');
         } catch (error) {
           set({ isLoading: false });
@@ -168,8 +188,11 @@ export const useAuthStore = create<AuthState>()(
             currency_id: currencyId
           });
           
+          // ✅ FIXED: Unbox layout data configuration payload safely
+          const resData = (response as any)?.data || response;
+          
           set({ 
-            user: { ...get().user, ...response },
+            user: { ...get().user, ...resData },
             isLoading: false 
           });
           
@@ -184,48 +207,53 @@ export const useAuthStore = create<AuthState>()(
       },
 
       checkAuth: async () => {
-              const token = localStorage.getItem('access_token');
-              if (!token) return false;
+        const token = localStorage.getItem('access_token');
+        if (!token) return false;
 
-              try {
-                // This call will trigger the refresh interceptor in client.ts 
-                // if the access_token is expired but refresh_token is valid.
-                const response = await apiClient.get(API_ENDPOINTS.auth.profile);
-                
-                set({
-                  user: response,
-                  token: localStorage.getItem('access_token') // Get potentially refreshed token
-                });
-                
-                return true;
-              } catch (error) {
-                // Interceptor handles the cleanup/redirect, so we just return false
-                return false;
-              }
-            },
-
-      refreshExchangeRates: async () => {
         try {
-          const response = await apiClient.get(API_ENDPOINTS.currencies.exchangeRates);
+          // This call will trigger the refresh interceptor in client.ts 
+          // if the access_token is expired but refresh_token is valid.
+          const response = await apiClient.get(API_ENDPOINTS.auth.profile);
           
-          const { user } = get();
-          if (user?.preferred_currency && response.rates) {
-            const updatedCurrency = {
-              ...user.preferred_currency,
-              exchange_rate_to_kES: response.rates[user.preferred_currency.code] || user.preferred_currency.exchange_rate_to_kES
-            };
-            
-            set({
-              user: {
-                ...user,
-                preferred_currency: updatedCurrency
-              }
-            });
-          }
+          // ✅ FIXED: Safely target the correct payload signature for session hydration
+          const resData = (response as any)?.data || response;
+          
+          set({
+            user: resData.user || resData,
+            token: localStorage.getItem('access_token') // Get potentially refreshed token
+          });
+          
+          return true;
         } catch (error) {
-          console.error('Failed to refresh exchange rates:', error);
+          // Interceptor handles the cleanup/redirect, so we just return false
+          return false;
         }
       },
+    refreshExchangeRates: async () => {
+            try {
+              const response = await apiClient.get(API_ENDPOINTS.currencies.exchangeRates);
+              
+              // ✅ FIXED: Unbox rates dictionary from the Axios wrapper layout payload safely
+              const resData = (response as any)?.data || response;
+              
+              const { user } = get();
+              if (user?.preferred_currency && resData.rates) {
+                const updatedCurrency = {
+                  ...user.preferred_currency,
+                  exchange_rate_to_kES: resData.rates[user.preferred_currency.code] || user.preferred_currency.exchange_rate_to_kES
+                };
+                
+                set({
+                  user: {
+                    ...user,
+                    preferred_currency: updatedCurrency
+                  }
+                });
+              }
+            } catch (error) {
+              console.error('Failed to refresh exchange rates:', error);
+            }
+          },
     }),
     {
       name: 'auth-storage',

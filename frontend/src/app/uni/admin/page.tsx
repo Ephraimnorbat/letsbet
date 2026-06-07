@@ -47,23 +47,30 @@ export default function SuperAdminDashboard() {
   ];
 
   const fetchSystemMetrics = async () => {
-    setIsLoading(true);
-    try {
-      // Replace with your real core metrics overview endpoint if available
-      const response = await apiClient.get('/api/casino/crash/admin-metrics/');
-      if (response) setMetrics(response);
-    } catch (err) {
-      // Fallback fallback state to keep layout pristine if endpoint isn't fully migrated yet
-      setMetrics({
-        active_players: 142,
-        total_pool_value: 843250.00,
-        system_multiplier_ceiling: 250.00,
-        websocket_status: 'healthy'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      setIsLoading(true);
+      try {
+        // Replace with your real core metrics overview endpoint if available
+        const response = await apiClient.get('/api/casino/crash/admin-metrics/');
+        
+        // ✅ FIXED: Read directly from response.data instead of passing the entire Axios wrapper
+        if (response?.data) {
+          setMetrics(response.data);
+        } else if (response) {
+          // Fallback for custom clients that auto-unwrap the data field
+          setMetrics(response as any);
+        }
+      } catch (err) {
+        // Fallback state to keep layout pristine if endpoint isn't fully migrated yet
+        setMetrics({
+          active_players: 142,
+          total_pool_value: 843250.00,
+          system_multiplier_ceiling: 250.00,
+          websocket_status: 'healthy'
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchSystemMetrics();

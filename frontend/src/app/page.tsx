@@ -4,12 +4,22 @@ import { motion } from 'framer-motion';
 import { ArrowRight, TrendingUp, Zap, Shield, Gift } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useAuthStore } from '@/store/authStore';
 import LiveMatchesSection from '@/components/home/LiveMatchesSection';
 import FeaturedSports from '@/components/home/FeaturedSports';
 import UpcomingMatches from '@/components/home/UpcomingMatches';
 
 export default function Home() {
+  const { user } = useAuthStore();
   const [activeLeague, setActiveLeague] = useState('upcoming');
+
+  // Dynamic Profile Presentation Settings
+  const currencySymbol = user?.currency_symbol || '$';
+  const exchangeRate = user?.exchange_rate || 1;
+  
+  // Calculate bonus baseline threshold safely relative to user's exchange contexts
+  const dynamicBonusCap = 100 / exchangeRate;
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -66,8 +76,10 @@ export default function Home() {
 
         {/* Live Matches Section */}
         <LiveMatchesSection sportKey={activeLeague} />
+        
         {/* Upcoming Matches */}
         <UpcomingMatches sportKey={activeLeague} />
+        
         {/* Features Section */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-slate-800 rounded-lg p-6 text-center hover:bg-slate-700 transition-all hover:transform hover:scale-105">
@@ -88,7 +100,7 @@ export default function Home() {
           <div className="bg-slate-800 rounded-lg p-6 text-center hover:bg-slate-700 transition-all hover:transform hover:scale-105">
             <Gift className="w-12 h-12 text-purple-500 mx-auto mb-3" />
             <h3 className="font-semibold mb-2">Welcome Bonus</h3>
-            <p className="text-sm text-gray-400">100% up to $100</p>
+            <p className="text-sm text-gray-400">100% up to {currencySymbol}{dynamicBonusCap.toFixed(0)}</p>
           </div>
         </div>
       </div>

@@ -19,10 +19,17 @@ interface HeaderProps {
 
 export default function Header({ onMenuToggle }: HeaderProps) {
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
+  const authStore = useAuthStore();
+  
+  const user = authStore?.user as any;
+  const logout = authStore?.logout;
+
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  
+  // ✅ FIXED: Add the missing notification tracking state hooks
   const [showNotifications, setShowNotifications] = useState(false);
+  
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   // Dynamic state values initialized empty to completely prevent hardcoding
@@ -61,14 +68,17 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   }, [user]);
 
   const [isFetching, setIsFetching] = useState(false);
-
-  const fetchWalletBalance = async () => {
+const fetchWalletBalance = async () => {
     if (isFetching || !user) return; 
 
     setIsFetching(true);
     try {
       const response = await apiClient.get(API_ENDPOINTS.wallet.balance);
-      const freshBalance = response?.balance !== undefined ? response.balance : (response?.data?.balance ?? null);
+      
+      // ✅ FIXED: Cast response to any to freely parse both direct unboxed objects and standard Axios .data structures
+      const resData = (response as any)?.data || response;
+      const freshBalance = resData?.balance !== undefined ? resData.balance : null;
+      
       setWalletBalance(freshBalance);
     } catch (error) {
       if (error === 'AUTH_EXPIRED') return;
