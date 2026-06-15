@@ -26,13 +26,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  
-  // ✅ FIXED: Add the missing notification tracking state hooks
   const [showNotifications, setShowNotifications] = useState(false);
-  
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
-  // Dynamic state values initialized empty to completely prevent hardcoding
   const [currencySymbol, setCurrencySymbol] = useState<string>('');
   const [currencyCode, setCurrencyCode] = useState<string>('');
 
@@ -44,7 +40,6 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Sync state values dynamically straight from your backend response keys
   useEffect(() => {
     if (user) {
       const symbol = user.currency_details?.symbol || user.country_details?.default_currency_details?.symbol || '';
@@ -55,7 +50,6 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     }
   }, [user]);
 
-  // Fetch wallet balance when user is logged in
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     
@@ -68,21 +62,18 @@ export default function Header({ onMenuToggle }: HeaderProps) {
   }, [user]);
 
   const [isFetching, setIsFetching] = useState(false);
-const fetchWalletBalance = async () => {
+  const fetchWalletBalance = async () => {
     if (isFetching || !user) return; 
 
     setIsFetching(true);
     try {
       const response = await apiClient.get(API_ENDPOINTS.wallet.balance);
-      
-      // ✅ FIXED: Cast response to any to freely parse both direct unboxed objects and standard Axios .data structures
       const resData = (response as any)?.data || response;
       const freshBalance = resData?.balance !== undefined ? resData.balance : null;
       
       setWalletBalance(freshBalance);
     } catch (error) {
       if (error === 'AUTH_EXPIRED') return;
-      
       if ((error as any).status === 429) {
         console.warn("Throttled by server. Slowing down...");
       }
@@ -117,23 +108,22 @@ const fetchWalletBalance = async () => {
       className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
         scrolled 
           ? 'bg-slate-900/95 backdrop-blur-xl shadow-lg' 
-          : 'bg-gradient-to-r from-slate-900 to-slate-800'
+          : 'bg-slate-900 border-b border-slate-800/40'
       }`}
     >
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-3 sm:px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <div className="flex items-center space-x-4">
+          {/* Logo Section */}
+          <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
             <button
               onClick={onMenuToggle}
-              className="lg:hidden p-2 rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
             >
-              <MenuIcon className="w-5 h-5" />
+              <MenuIcon className="w-5 h-5 text-gray-100" />
             </button>
-            <Link href="/" className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200" />
-              <span className="relative text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-                UNIBET 360
+            <Link href="/" className="relative group shrink-0">
+              <span className="relative text-lg sm:text-2xl font-black text-white tracking-wide">
+                UNIBET <span className="text-blue-500">360</span>
               </span>
             </Link>
           </div>
@@ -145,15 +135,13 @@ const fetchWalletBalance = async () => {
                 key={item.name}
                 href={item.href}
                 className={`relative px-4 py-2 rounded-lg transition-all duration-300 ${
-                  item.active
-                    ? 'text-white'
-                    : 'text-gray-300 hover:text-white'
+                  item.active ? 'text-white' : 'text-gray-300 hover:text-white'
                 }`}
               >
                 {item.active && (
                   <motion.div
                     layoutId="activeNav"
-                    className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg"
+                    className="absolute inset-0 bg-slate-800 rounded-lg"
                     transition={{ type: "spring", duration: 0.6 }}
                   />
                 )}
@@ -162,12 +150,12 @@ const fetchWalletBalance = async () => {
             ))}
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center space-x-2">
+          {/* Right Functional Utilities Section */}
+          <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="p-2 rounded-lg hover:bg-slate-800 transition"
+              className="hidden sm:flex p-2 rounded-lg hover:bg-slate-800 transition"
             >
               <Search className="w-5 h-5" />
             </motion.button>
@@ -182,7 +170,9 @@ const fetchWalletBalance = async () => {
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
             </motion.button>
             
-            <ThemeToggle />
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
 
             {user ? (
               <>
@@ -191,7 +181,7 @@ const fetchWalletBalance = async () => {
                   <motion.div
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="hidden md:flex items-center space-x-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 hover:border-green-500/50 transition-all cursor-pointer"
+                    className="hidden md:flex items-center space-x-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:border-green-500/40 transition-all cursor-pointer"
                   >
                     <Wallet className="w-4 h-4 text-green-400" />
                     <div className="flex flex-col">
@@ -203,18 +193,18 @@ const fetchWalletBalance = async () => {
                   </motion.div>
                 </Link>
 
-                {/* User Menu */}
+                {/* Authenticated User Profile Menu */}
                 <div className="relative">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-800 transition"
+                    className="flex items-center space-x-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-slate-800 transition"
                   >
                     <div className="relative">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center font-semibold">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-semibold text-white">
                         {getUserInitial()}
                       </div>
-                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900" />
+                      <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-slate-900" />
                     </div>
                     <div className="hidden md:block text-left">
                       <div className="text-sm font-medium">{getUserDisplayName()}</div>
@@ -235,22 +225,22 @@ const fetchWalletBalance = async () => {
                       >
                         <div className="p-3 border-b border-slate-700">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center font-semibold text-lg">
+                            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-semibold text-lg text-white">
                               {getUserInitial()}
                             </div>
                             <div>
-                              <div className="font-medium">{getUserDisplayName()}</div>
+                              <div className="font-medium text-white">{getUserDisplayName()}</div>
                               <div className="text-xs text-gray-400">{user.email}</div>
                             </div>
                           </div>
                         </div>
                         
                         <div className="p-2 space-y-1">
-                          <Link href="/profile" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition">
+                          <Link href="/profile" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition text-gray-200">
                             <User className="w-4 h-4" />
                             <span className="text-sm">Profile</span>
                           </Link>
-                          <Link href="/wallet" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition">
+                          <Link href="/wallet" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition text-gray-200">
                             <Wallet className="w-4 h-4" />
                             <span className="text-sm">Wallet</span>
                             {walletBalance !== null && (
@@ -259,11 +249,11 @@ const fetchWalletBalance = async () => {
                               </span>
                             )}
                           </Link>
-                          <Link href="/settings" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition">
+                          <Link href="/settings" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition text-gray-200">
                             <Settings className="w-4 h-4" />
                             <span className="text-sm">Settings</span>
                           </Link>
-                          <Link href="/promotions" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition">
+                          <Link href="/promotions" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-700 transition text-gray-200">
                             <Gift className="w-4 h-4" />
                             <span className="text-sm">Promotions</span>
                           </Link>
@@ -282,10 +272,11 @@ const fetchWalletBalance = async () => {
                 </div>
               </>
             ) : (
-              <div className="flex items-center space-x-2">
+              /* Anonymous/Guest Navigation Action Buttons */
+              <div className="flex items-center space-x-1 sm:space-x-2">
                 <Link
                   href="/auth"
-                  className="px-4 py-2 rounded-lg hover:bg-slate-800 transition text-sm"
+                  className="px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-gray-200 hover:bg-slate-800 rounded-lg transition"
                 >
                   Sign In
                 </Link>
@@ -295,9 +286,9 @@ const fetchWalletBalance = async () => {
                 >
                   <Link
                     href="/auth?mode=register"
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg hover:shadow-lg transition text-sm font-medium"
+                    className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition"
                   >
-                    Sign Up
+                    Join
                   </Link>
                 </motion.div>
               </div>
