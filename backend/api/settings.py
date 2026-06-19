@@ -188,14 +188,15 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
+CORS_ALLOWED_ORIGINS = [
+    'https://unibet360.com',
+    'https://www.unibet360.com',
+]
+
 CSRF_TRUSTED_ORIGINS = [
     'https://unibet360.com',
     'https://www.unibet360.com',
     'http://localhost:3000',  # For local development compatibility
-]
-CORS_ALLOWED_ORIGINS = [
-    'https://unibet360.com',
-    'https://www.unibet360.com',
 ]
 
 # Swagger settings
@@ -208,7 +209,6 @@ SWAGGER_SETTINGS = {
         }
     }
 }
-
 # Sports API Configuration (Your specific API)
 SPORTS_API_KEY = config('SPORTS_API_KEY', default='')
 SPORTS_API_HOST = config('SPORTS_API_HOST', default='free-api-live-football-data.p.rapidapi.com')
