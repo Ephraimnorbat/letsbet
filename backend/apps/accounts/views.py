@@ -19,6 +19,8 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import check_password
 
+
+from django.conf import settings
 from .helpers import resolve_user_currency
 from .utils import generate_verification_token
 from .tasks import update_exchange_rates
@@ -65,12 +67,14 @@ class RegisterView(generics.CreateAPIView):
         user.save()
 
         uid, token = generate_verification_token(user)
-        verification_link = f"http://localhost:3000/verify/{uid}/{token}"
+        verification_link = (
+            f"{settings.MAIN_URL}/verify/{uid}/{token}"
+        )
 
         send_mail(
             "Verify your account",
             f"Click to verify: {verification_link}",
-            "noreply@letsbet.com",
+            settings.DEFAULT_FROM_EMAIL,
             [user.email],
             fail_silently=False,
         )
