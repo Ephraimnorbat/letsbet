@@ -188,8 +188,15 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Only for development
-CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    'https://unibet360.com',
+    'https://www.unibet360.com',
+    'http://localhost:3000',  # For local development compatibility
+]
+CORS_ALLOWED_ORIGINS = [
+    'https://unibet360.com',
+    'https://www.unibet360.com',
+]
 
 # Swagger settings
 SWAGGER_SETTINGS = {
