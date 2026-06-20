@@ -21,18 +21,19 @@ class BetTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BetType.objects.filter(is_active=True)
     serializer_class = BetTypeSerializer
     permission_classes = [IsAuthenticated]
-
 class PlaceBetView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
-
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         selections_data = request.data.get('selections', [])
         stake = float(request.data.get('stake', 0))
 
+        if not selections_data:
+            return Response({"error": "No selections provided"}, status=status.HTTP_400_BAD_REQUEST)
+
         # --- STEP 1: CREATE THE SLIP ONCE (Outside the loop) ---
-        # We calculate the total odds and potential win for the WHOLE slip first
+        # Calculate the total odds and potential win for the WHOLE slip first
         total_odds = 1.0
         for s in selections_data:
             total_odds *= float(s['odds'])
@@ -45,13 +46,32 @@ class PlaceBetView(generics.CreateAPIView):
             status='pending'
         )
 
-        # --- STEP 2: LINK SELECTIONS TO THE MASTER SLIP ---
+        # --- STEP 2: DYNAMIC DATABASE SEEDING (Guarantees relational targets exist) ---
+        # Safeguard for missing bet type configurations
+        default_bet_type, _ = BetType.objects.get_or_create(
+            id=1,
+            defaults={
+                'name': 'Standard Bet',
+                'description': 'Regular match selection bet',
+                'is_active': True
+            }
+        )
+
+        # Safeguard for default parent sport mapping
+        default_sport, _ = Team.objects.model._meta.get_field('league').related_model._meta.get_field('sport').related_model.objects.get_or_create(
+            id=1,
+            defaults={
+                'name': 'Soccer',
+                'is_active': True
+            }
+        )
+
+        # --- STEP 3: LINK SELECTIONS TO THE MASTER SLIP ---
         for sel in selections_data:
-            # 1. Handle Missing League: Since the frontend doesn't send it, 
-            # we use a default or extract it if available.
+            # 1. Handle Missing League fallback cleanly via the default sport record
             league_obj, _ = League.objects.get_or_create(
-                name="General League", # Or sel.get('league', 'General')
-                defaults={'sport_id': 1}
+                name="General League",
+                defaults={'sport': default_sport}
             )
 
             # 2. Split the matchName string into Home and Away
@@ -78,37 +98,24 @@ class PlaceBetView(generics.CreateAPIView):
                     'league': league_obj,
                     'home_team': home_team_obj,
                     'away_team': away_team_obj,
-                    'match_date': now(), # Uses the imported 'now'
+                    'match_date': now(),
                     'status': 'scheduled'
                 }
             )
 
-            # 5. Link to the single master_slip
+            # 5. Link to the single master_slip (Duplicate execution block removed)
             Bet.objects.create(
                 slip=master_slip,
                 user=request.user,
                 match=match_obj,
                 selection=sel['selection'],
                 odds=sel['odds'],
-                bet_type_id=1,
-                stake=stake,
-                status='pending'
-            )
-    
-
-            # 4. Finally, create the Bet linked to the Single master_slip
-            Bet.objects.create(
-                slip=master_slip,
-                user=request.user,
-                match=match_obj,
-                selection=sel['selection'],
-                odds=sel['odds'],
-                bet_type_id=1,
+                bet_type=default_bet_type,
                 stake=stake,
                 status='pending'
             )
 
-        # --- STEP 3: DEDUCT WALLET ONCE ---
+        # --- STEP 4: DEDUCT WALLET ONCE ---
         wallet = request.user.wallet
         wallet.balance = F('balance') - stake
         wallet.save()
