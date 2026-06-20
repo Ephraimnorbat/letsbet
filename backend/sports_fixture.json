@@ -1,0 +1,122 @@
+[
+{
+    "model": "matches.sport",
+    "pk": 1,
+    "fields": {
+        "name": "American Football",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.723Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 2,
+    "fields": {
+        "name": "Aussie Rules",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.750Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 3,
+    "fields": {
+        "name": "Baseball",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.768Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 4,
+    "fields": {
+        "name": "Basketball",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.824Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 5,
+    "fields": {
+        "name": "Boxing",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.851Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 6,
+    "fields": {
+        "name": "Cricket",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.865Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 7,
+    "fields": {
+        "name": "Handball",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.900Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 8,
+    "fields": {
+        "name": "Ice Hockey",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.916Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 9,
+    "fields": {
+        "name": "Lacrosse",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.970Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 10,
+    "fields": {
+        "name": "Mixed Martial Arts",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.985Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 11,
+    "fields": {
+        "name": "Rugby League",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.001Z"
+    }
+},
+{
+    "model": "matches.sport",
+    "pk": 12,
+    "fields": {
+        "name": "Soccer",
+        "icon": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.026Z"
+    }
+}
+]

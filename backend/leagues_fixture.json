@@ -1,0 +1,977 @@
+[
+{
+    "model": "matches.league",
+    "pk": 1,
+    "fields": {
+        "name": "NCAAF",
+        "sport": 1,
+        "country": "",
+        "external_key": "americanfootball_ncaaf",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.731Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 2,
+    "fields": {
+        "name": "UFL",
+        "sport": 1,
+        "country": "",
+        "external_key": "americanfootball_ufl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.741Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 3,
+    "fields": {
+        "name": "AFL",
+        "sport": 2,
+        "country": "",
+        "external_key": "aussierules_afl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.759Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 4,
+    "fields": {
+        "name": "KBO",
+        "sport": 3,
+        "country": "",
+        "external_key": "baseball_kbo",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.775Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 5,
+    "fields": {
+        "name": "MiLB",
+        "sport": 3,
+        "country": "",
+        "external_key": "baseball_milb",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.785Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 6,
+    "fields": {
+        "name": "MLB",
+        "sport": 3,
+        "country": "",
+        "external_key": "baseball_mlb",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.795Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 7,
+    "fields": {
+        "name": "NCAA Baseball",
+        "sport": 3,
+        "country": "",
+        "external_key": "baseball_ncaa",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.805Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 8,
+    "fields": {
+        "name": "NPB",
+        "sport": 3,
+        "country": "",
+        "external_key": "baseball_npb",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.817Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 9,
+    "fields": {
+        "name": "Basketball Euroleague",
+        "sport": 4,
+        "country": "",
+        "external_key": "basketball_euroleague",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.833Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 10,
+    "fields": {
+        "name": "NBA",
+        "sport": 4,
+        "country": "",
+        "external_key": "basketball_nba",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.843Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 11,
+    "fields": {
+        "name": "Boxing",
+        "sport": 5,
+        "country": "",
+        "external_key": "boxing_boxing",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.857Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 12,
+    "fields": {
+        "name": "International Twenty20",
+        "sport": 6,
+        "country": "",
+        "external_key": "cricket_international_t20",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.871Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 13,
+    "fields": {
+        "name": "IPL",
+        "sport": 6,
+        "country": "",
+        "external_key": "cricket_ipl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.882Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 14,
+    "fields": {
+        "name": "Pakistan Super League",
+        "sport": 6,
+        "country": "",
+        "external_key": "cricket_psl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.891Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 15,
+    "fields": {
+        "name": "Handball-Bundesliga",
+        "sport": 7,
+        "country": "",
+        "external_key": "handball_germany_bundesliga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.907Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 16,
+    "fields": {
+        "name": "AHL",
+        "sport": 8,
+        "country": "",
+        "external_key": "icehockey_ahl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.923Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 17,
+    "fields": {
+        "name": "Liiga",
+        "sport": 8,
+        "country": "",
+        "external_key": "icehockey_liiga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.933Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 18,
+    "fields": {
+        "name": "NHL",
+        "sport": 8,
+        "country": "",
+        "external_key": "icehockey_nhl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.943Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 19,
+    "fields": {
+        "name": "HockeyAllsvenskan",
+        "sport": 8,
+        "country": "",
+        "external_key": "icehockey_sweden_allsvenskan",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.952Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 20,
+    "fields": {
+        "name": "SHL",
+        "sport": 8,
+        "country": "",
+        "external_key": "icehockey_sweden_hockey_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.963Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 21,
+    "fields": {
+        "name": "NCAA Lacrosse",
+        "sport": 9,
+        "country": "",
+        "external_key": "lacrosse_ncaa",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.978Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 22,
+    "fields": {
+        "name": "MMA",
+        "sport": 10,
+        "country": "",
+        "external_key": "mma_mixed_martial_arts",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:30.993Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 23,
+    "fields": {
+        "name": "NRL",
+        "sport": 11,
+        "country": "",
+        "external_key": "rugbyleague_nrl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.008Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 24,
+    "fields": {
+        "name": "State of Origin",
+        "sport": 11,
+        "country": "",
+        "external_key": "rugbyleague_nrl_state_of_origin",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.018Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 25,
+    "fields": {
+        "name": "Primera División - Argentina",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_argentina_primera_division",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.038Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 26,
+    "fields": {
+        "name": "A-League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_australia_aleague",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.047Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 27,
+    "fields": {
+        "name": "Austrian Football Bundesliga",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_austria_bundesliga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.056Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 28,
+    "fields": {
+        "name": "Belgium First Div",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_belgium_first_div",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.066Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 29,
+    "fields": {
+        "name": "Brazil Série A",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_brazil_campeonato",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.076Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 30,
+    "fields": {
+        "name": "Brazil Série B",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_brazil_serie_b",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.085Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 31,
+    "fields": {
+        "name": "Primera División - Chile",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_chile_campeonato",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.094Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 32,
+    "fields": {
+        "name": "Super League - China",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_china_superleague",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.104Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 33,
+    "fields": {
+        "name": "Copa Libertadores",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_conmebol_copa_libertadores",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.113Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 34,
+    "fields": {
+        "name": "Copa Sudamericana",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_conmebol_copa_sudamericana",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.124Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 35,
+    "fields": {
+        "name": "Denmark Superliga",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_denmark_superliga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.134Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 36,
+    "fields": {
+        "name": "Championship",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_efl_champ",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.143Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 37,
+    "fields": {
+        "name": "League 1",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_england_league1",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.153Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 38,
+    "fields": {
+        "name": "League 2",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_england_league2",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.163Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 39,
+    "fields": {
+        "name": "EPL",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_epl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.172Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 40,
+    "fields": {
+        "name": "FA Cup",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_fa_cup",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.183Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 41,
+    "fields": {
+        "name": "FIFA World Cup",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_fifa_world_cup",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.194Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 42,
+    "fields": {
+        "name": "Veikkausliiga - Finland",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_finland_veikkausliiga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.204Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 43,
+    "fields": {
+        "name": "Coupe de France",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_france_coupe_de_france",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.214Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 44,
+    "fields": {
+        "name": "Ligue 1 - France",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_france_ligue_one",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.224Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 45,
+    "fields": {
+        "name": "Ligue 2 - France",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_france_ligue_two",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.235Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 46,
+    "fields": {
+        "name": "Bundesliga - Germany",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_germany_bundesliga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.245Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 47,
+    "fields": {
+        "name": "Bundesliga 2 - Germany",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_germany_bundesliga2",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.255Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 48,
+    "fields": {
+        "name": "DFB-Pokal",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_germany_dfb_pokal",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.265Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 49,
+    "fields": {
+        "name": "3. Liga - Germany",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_germany_liga3",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.274Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 50,
+    "fields": {
+        "name": "Super League - Greece",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_greece_super_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.284Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 51,
+    "fields": {
+        "name": "Serie A - Italy",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_italy_serie_a",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.293Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 52,
+    "fields": {
+        "name": "Serie B - Italy",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_italy_serie_b",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.303Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 53,
+    "fields": {
+        "name": "J League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_japan_j_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.313Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 54,
+    "fields": {
+        "name": "K League 1",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_korea_kleague1",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.322Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 55,
+    "fields": {
+        "name": "League of Ireland",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_league_of_ireland",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.332Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 56,
+    "fields": {
+        "name": "Liga MX",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_mexico_ligamx",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.341Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 57,
+    "fields": {
+        "name": "Dutch Eredivisie",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_netherlands_eredivisie",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.351Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 58,
+    "fields": {
+        "name": "Eliteserien - Norway",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_norway_eliteserien",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.361Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 59,
+    "fields": {
+        "name": "Ekstraklasa - Poland",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_poland_ekstraklasa",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.370Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 60,
+    "fields": {
+        "name": "Primeira Liga - Portugal",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_portugal_primeira_liga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.380Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 61,
+    "fields": {
+        "name": "Premier League - Russia",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_russia_premier_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.389Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 62,
+    "fields": {
+        "name": "Saudi Pro League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_saudi_arabia_pro_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.400Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 63,
+    "fields": {
+        "name": "Copa del Rey",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_spain_copa_del_rey",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.409Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 64,
+    "fields": {
+        "name": "La Liga - Spain",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_spain_la_liga",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.419Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 65,
+    "fields": {
+        "name": "La Liga 2 - Spain",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_spain_segunda_division",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.429Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 66,
+    "fields": {
+        "name": "Premiership - Scotland",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_spl",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.439Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 67,
+    "fields": {
+        "name": "Allsvenskan - Sweden",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_sweden_allsvenskan",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.449Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 68,
+    "fields": {
+        "name": "Superettan - Sweden",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_sweden_superettan",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.458Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 69,
+    "fields": {
+        "name": "Swiss Superleague",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_switzerland_superleague",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.476Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 70,
+    "fields": {
+        "name": "Turkey Super League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_turkey_super_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.486Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 71,
+    "fields": {
+        "name": "UEFA Champions League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_uefa_champs_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.496Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 72,
+    "fields": {
+        "name": "UEFA Europa Conference League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_uefa_europa_conference_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.505Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 73,
+    "fields": {
+        "name": "UEFA Europa League",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_uefa_europa_league",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.515Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 74,
+    "fields": {
+        "name": "MLS",
+        "sport": 12,
+        "country": "",
+        "external_key": "soccer_usa_mls",
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-11T16:01:31.524Z"
+    }
+},
+{
+    "model": "matches.league",
+    "pk": 76,
+    "fields": {
+        "name": "General League",
+        "sport": 1,
+        "country": "",
+        "external_key": null,
+        "logo": "",
+        "is_active": true,
+        "created_at": "2026-04-19T18:51:20.897Z"
+    }
+}
+]
