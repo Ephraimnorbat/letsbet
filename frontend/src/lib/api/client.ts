@@ -12,6 +12,9 @@ class ApiClient {
     this.api = axios.create({
       baseURL: process.env.NEXT_PUBLIC_API_URL,
       timeout: 10000,
+      withCredentials: true,             // 👈 CRITICAL: Forces browser to manage cross-origin cookies
+      xsrfCookieName: 'csrftoken',       // 👈 The standard name of the cookie dropped by Django
+      xsrfHeaderName: 'X-CSRFToken',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -60,7 +63,8 @@ class ApiClient {
           try {
             const response = await axios.post(
               `${process.env.NEXT_PUBLIC_API_URL}/auth/token/refresh/`,
-              { refresh: refreshToken }
+              { refresh: refreshToken },
+              { withCredentials: true }
             );
 
             const newAccessToken = response.data.access;
