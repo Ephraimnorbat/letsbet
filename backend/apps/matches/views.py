@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view
+from rest_framework.permissions import IsAdminUser, SAFE_METHODS
 
 
 from django_filters.rest_framework import DjangoFilterBackend
@@ -55,9 +56,13 @@ class TeamViewSet(viewsets.ModelViewSet):
 
 
 class MatchViewSet(viewsets.ModelViewSet):
-    queryset = Match.objects.all()
-    serializer_class = MatchSerializer
-    permission_classes = [AllowAny]
+    queryset = Match.objects.all().order_by('-match_date')
+    
+    # Allow anyone to read (GET, HEAD, OPTIONS), but require admin for POST, PUT, PATCH, DELETE
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return [IsAuthenticated(), IsAdminUser()]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -86,6 +91,18 @@ class UpcomingMatchesView(generics.ListAPIView):
             match_date__gte=timezone.now()
         ).order_by('match_date')[:50]
 
+class AdminMatchesListView(generics.ListAPIView):
+    """
+    Returns a list of all matches manually created or managed via the database.
+    Can filter for matches where external_id is null (manually added by Admin)
+    or just return all local DB matches.
+    """
+    serializer_class = MatchListSerializer
+    permission_classes = [AllowAny] # Anyone can view these fixtures to bet on them
+
+    def get_queryset(self):
+        # Filter for entries created manually in the admin dashboard (no external API id)
+        return Match.objects.filter(external_id__isnull=True).order_by('-match_date')
 
 # ================= MAIN API (IMPORTANT) =================
 

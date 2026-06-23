@@ -36,21 +36,35 @@ interface User {
   currency_symbol?: string;
   exchange_rate: number;   
   balance?: number;
+  is_staff?: boolean;
+  is_superuser?: boolean;
 }
+
 
 interface AuthState {
   user: User | null;
   token: string | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
-  login: (identifier: string, password: string, loginType?: 'email' | 'phone') => Promise<void>;
+  isHydrated: boolean;
+  setHydrated: (state: boolean) => void;
+
+  login: (
+    identifier: string,
+    password: string,
+    loginType?: 'email' | 'phone'
+  ) => Promise<void>;
+
   register: (userData: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
-  updatePreferences: (countryId: number, currencyId?: number) => Promise<void>;
+  updatePreferences: (
+    countryId: number,
+    currencyId?: number
+  ) => Promise<void>;
   checkAuth: () => Promise<boolean>;
   refreshExchangeRates: () => Promise<void>;
 }
-
 interface RegisterData {
   username: string;
   email: string;
@@ -66,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
+      isAuthenticated: false,
       isLoading: false,
 
       login: async (identifier: string, password: string, loginType: 'email' | 'phone' = 'email') => {
@@ -78,6 +93,8 @@ export const useAuthStore = create<AuthState>()(
               : { phone: identifier, password };
 
           const response = await apiClient.post(API_ENDPOINTS.auth.login, loginData);
+          console.log("LOGIN RESPONSE:", response);
+          console.log("STORE USER:", useAuthStore.getState().user);
 
           // ✅ HANDLE BOTH API SHAPES SAFELY
           const data = response?.data ?? response;
@@ -97,10 +114,12 @@ export const useAuthStore = create<AuthState>()(
           set({
             user,
             token,
+            isAuthenticated: true,
             isLoading: false
           });
 
           toast.success(`Welcome back, ${user.username || 'User'}!`);
+          return { user, token };
         } catch (error: any) {
           set({ isLoading: false });
 
@@ -157,7 +176,11 @@ export const useAuthStore = create<AuthState>()(
                 // Always clear local state even if API call fails
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
-                set({ user: null, token: null });
+                set({
+                user: null,
+                token: null,
+                isAuthenticated: false
+              });
                 toast.success('Logged out successfully');
                 window.location.href = '/auth'; // Redirect to your unified auth page
               }
@@ -218,16 +241,22 @@ updateProfile: async (data: Partial<User>) => {
           // ✅ FIXED: Safely target the correct payload signature for session hydration
           const resData = (response as any)?.data || response;
           
-          set({
-            user: resData.user || resData,
-            token: localStorage.getItem('access_token') // Get potentially refreshed token
-          });
-          
+        set({
+          user: resData.user || resData,
+          token: localStorage.getItem('access_token'),
+          isAuthenticated: true
+        });
+                  
           return true;
         } catch (error) {
-          // Interceptor handles the cleanup/redirect, so we just return false
-          return false;
-        }
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false
+        });
+
+        return false;
+      }
       },
     refreshExchangeRates: async () => {
             try {
@@ -255,12 +284,18 @@ updateProfile: async (data: Partial<User>) => {
             }
           },
     }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({ 
-        user: state.user, 
-        token: state.token 
-      }),
-    }
+{
+  name: 'auth-storage',
+
+  partialize: (state) => ({
+    user: state.user,
+    token: state.token,
+    isAuthenticated: state.isAuthenticated,
+  }),
+
+  onRehydrateStorage: () => (state) => {
+    state?.setHydrated(true);
+  },
+}
   )
 );

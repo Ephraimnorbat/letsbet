@@ -130,6 +130,8 @@ class LoginView(APIView):
                 "currency_symbol": currency.symbol,
                 "exchange_rate": float(currency.exchange_rate_to_kES),
                 "currency_code": currency.code,  
+                "is_staff": user.is_staff,
+                "is_superuser": user.is_superuser,
             }
         }, status=status.HTTP_200_OK)
 

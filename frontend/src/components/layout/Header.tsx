@@ -40,10 +40,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (user) {
-      const symbol = user.currency_details?.symbol || user.country_details?.default_currency_details?.symbol || '';
-      const code = user.currency_details?.code || user.country_details?.default_currency_details?.code || '';
+      // 🚀 Match the flat payload keys returned by your LoginView response structure
+      const symbol = user.currency_symbol || '';
+      const code = user.currency_code || '';
       
       setCurrencySymbol(symbol);
       setCurrencyCode(code);

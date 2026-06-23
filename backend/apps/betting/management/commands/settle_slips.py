@@ -11,9 +11,8 @@ class Command(BaseCommand):
     help = 'Settles pending bet slips based on match results from the API'
 
     def handle(self, *args, **options):
-        # 1. Fetch recently completed matches from the Odds API
-        # This returns scores and the 'completed' status
-        api_results = sports_api.get_live_scores('upcoming')
+        # 1. 🚀 CHANGED: Query completed/live events instead of 'upcoming' to get final scores
+        api_results = sports_api.get_live_scores('live') 
         if not api_results:
             self.stdout.write(self.style.WARNING("No match data received from API."))
             return
@@ -34,7 +33,6 @@ class Command(BaseCommand):
                 slip_lost = False
 
                 for bet in slip.selections.filter(status='pending'):
-                    # Use 'external_id' from your Match model
                     match_api_id = bet.match.external_id 
                     
                     if match_api_id in completed_matches:
@@ -45,7 +43,13 @@ class Command(BaseCommand):
                         
                         bet.status = 'won' if is_win else 'lost'
                         bet.settled_at = timezone.now()
-                        bet.result = f"{match_data['scores'][0]['score']}-{match_data['scores'][1]['score']}"
+                        
+                        # 🚀 Safe fallback evaluation for score formatting 
+                        if 'scores' in match_data and len(match_data['scores']) >= 2:
+                            bet.result = f"{match_data['scores'][0]['score']}-{match_data['scores'][1]['score']}"
+                        else:
+                            bet.result = "Settled"
+                            
                         bet.save()
 
                         if not is_win:
@@ -61,30 +65,30 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f"Slip {slip.id} marked as LOST"))
                 
                 elif all_bets_settled:
-                        slip.status = 'won'
-                        slip.save()
-                        
-                        # 1. Update Wallet Balances
-                        wallet, created = Wallet.objects.get_or_create(user=slip.user)
-                        wallet.balance += slip.potential_win
-                        wallet.total_won += slip.potential_win # Update your stats field!
-                        wallet.save()
-                        
-                        # 2. Create Transaction Record
-                        Transaction.objects.create(
-                            user=slip.user,
-                            amount=slip.potential_win,
-                            transaction_type='credit',
-                            category='bet_payout', # If you added categories
-                            status='completed',
-                            description=f"Payout for Winning Slip #{slip.id}",
-                            reference=f"WIN-SLIP-{slip.id}-{uuid.uuid4().hex[:6].upper()}",
-                            completed_at=timezone.now()
-                        )
-                        
-                        self.stdout.write(self.style.SUCCESS(
-                            f"Slip {slip.id} settled: KSh {slip.potential_win} added and transaction recorded."
-                        ))
+                    slip.status = 'won'
+                    slip.save()
+                    
+                    # 1. Update Wallet Balances securely
+                    wallet, created = Wallet.objects.get_or_create(user=slip.user)
+                    wallet.balance += slip.potential_win
+                    wallet.total_won += slip.potential_win 
+                    wallet.save()
+                    
+                    # 2. Create Transaction Record
+                    Transaction.objects.create(
+                        user=slip.user,
+                        amount=slip.potential_win,
+                        transaction_type='credit',
+                        category='bet_payout', 
+                        status='completed',
+                        description=f"Payout for Winning Slip #{slip.id}",
+                        reference=f"WIN-SLIP-{slip.id}-{uuid.uuid4().hex[:6].upper()}",
+                        completed_at=timezone.now()
+                    )
+                    
+                    self.stdout.write(self.style.SUCCESS(
+                        f"Slip {slip.id} settled: {slip.potential_win} added and transaction recorded."
+                    ))
 
     def evaluate_bet(self, bet, match_data):
         """
@@ -92,7 +96,7 @@ class Command(BaseCommand):
         Assumes bet.selection is the Team Name or 'Draw'.
         """
         try:
-            # Extract scores safely from the API response
+            # Extract scores safely from the API response array matching exact team entities
             home_score = int(next(s['score'] for s in match_data['scores'] if s['name'] == match_data['home_team']))
             away_score = int(next(s['score'] for s in match_data['scores'] if s['name'] == match_data['away_team']))
 
@@ -104,9 +108,8 @@ class Command(BaseCommand):
             else:
                 actual_outcome = "Draw"
 
-            # Check if user's selection matches the actual outcome
             return bet.selection == actual_outcome
             
-        except (StopIteration, ValueError, KeyError):
+        except (StopIteration, ValueError, KeyError, TypeError):
             self.stdout.write(self.style.ERROR(f"Error parsing scores for match {match_data.get('id')}"))
             return False

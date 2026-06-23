@@ -8,6 +8,7 @@ from .views import (
     APIBackendHealthCheck,
     MatchStatsView,
     LineupView,
+    AdminMatchesListView,
     upcoming_matches,
     MatchResultsAPIView
 )
@@ -19,6 +20,7 @@ urlpatterns = [
 
     # ✅ MAIN ENDPOINT (USE THIS IN FRONTEND)
     path('upcoming/', upcoming_matches),
+    path('admin-fixtures/', AdminMatchesListView.as_view(), name='admin-matches-list'),
 
     # Live scores
     path('scores/<str:sport_key>/', LiveScoresAPIView.as_view()),

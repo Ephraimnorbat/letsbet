@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation'; // 🚀 Added to detect path
 import dynamic from 'next/dynamic';
 
 const Header = dynamic(() => import('./Header'), { ssr: false });
@@ -11,6 +12,7 @@ interface LayoutWrapperProps {
 }
 
 export default function LayoutWrapper({ children }: LayoutWrapperProps) {
+  const pathname = usePathname(); // 🚀 Keep track of where the user is
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -52,6 +54,11 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
     return null;
   }
 
+  // 🚀 IF ON THE AUTH PAGE: Render cleanly without loading Header, Sidebar, or triggering layout guards
+  if (pathname === '/auth') {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
       <Header onMenuToggle={() => setIsSidebarOpen(true)} />
@@ -68,7 +75,7 @@ export default function LayoutWrapper({ children }: LayoutWrapperProps) {
         isMobile={true} 
       />
       
-      {/* Main Content Container - This will be used by layout to add betting slip */}
+      {/* Main Content Container */}
       <div className={`pt-16 transition-all duration-300 ${getMainMargin()}`}>
         {children}
       </div>

@@ -48,6 +48,9 @@ export default function AuthPage() {
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   
+  // 🚀 Local flag to lock the global auth routing logic during dynamic login sequences
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  
   const [countries, setCountries] = useState<Country[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [loadingCountries, setLoadingCountries] = useState(true);
@@ -66,6 +69,20 @@ export default function AuthPage() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Global identity check hook safely wrapped against timing collisions
+  useEffect(() => {
+    if (isRedirecting) return;
+
+    const { user, isAuthenticated } = useAuthStore.getState();
+    if (isAuthenticated && user) {
+      if (user.is_superuser || user.is_staff) {
+        router.push('/uni/admin');
+      } else {
+        router.push('/');
+      }
+    }
+  }, [isRedirecting, router]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -88,7 +105,6 @@ export default function AuthPage() {
           apiClient.get(API_ENDPOINTS.currencies.list)
         ]);
 
-        // Standardize handling for direct raw arrays vs paginated objects containing .results
         const countriesList = Array.isArray(countriesRes) 
           ? countriesRes 
           : (countriesRes && Array.isArray((countriesRes as any).results)) 
@@ -203,9 +219,21 @@ export default function AuthPage() {
     try {
       if (isLogin) {
         const structuralIdentifier = loginType === 'email' ? formData.email : formData.phone;
-        await login(structuralIdentifier, formData.password);
+        
+        // Lock background guards from conflicting with this programmatic transition
+        setIsRedirecting(true);
+
+        const authResponse = await login(structuralIdentifier, formData.password);
         toast.success('Login successful!');
-        router.push('/');
+
+        // Extract user metrics seamlessly from newly serialized JSON properties
+        const targetUser = authResponse?.user || useAuthStore.getState().user;
+        
+        if (targetUser?.is_superuser || targetUser?.is_staff) {
+          router.push('/uni/admin');
+        } else {
+          router.push('/');
+        }
       } else {
         await register({
           username: formData.username,
@@ -220,6 +248,7 @@ export default function AuthPage() {
         router.push('/');
       }
     } catch (error: any) {
+      setIsRedirecting(false); // Unlock the router scope if user submits invalid credentials
       const errorMsg = error.response?.data?.message || 
                       error.response?.data?.error ||
                       error.message || 

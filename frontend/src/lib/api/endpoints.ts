@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
   
   // Match endpoints - UPDATED with all properties
   matches: {
+    adminFixtures: '/matches/admin-fixtures/',
     externalOdds: (leagueId: string | number) => `/matches/external/odds/${leagueId}/`,
     live: '/matches/scores/upcoming/',
     upcoming: '/matches/upcoming/',

@@ -10,34 +10,67 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.timezone import now
+from django.db import transaction
+from django.db.models import F
+from django.utils.timezone import now
+from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
 
+
+from apps.wallet.models import Wallet, Transaction
 from apps.matches.models import Match, League, Team
 from .models import Bet, BetSlip, BetType, SharedBetslip
 from .serializers import BetSerializer, CreateBetSerializer, BetSlipSerializer, BetTypeSerializer, BetSlipHistorySerializer
-from apps.wallet.models import Transaction
 
 
 class BetTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BetType.objects.filter(is_active=True)
     serializer_class = BetTypeSerializer
     permission_classes = [IsAuthenticated]
+
 class PlaceBetView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         selections_data = request.data.get('selections', [])
-        stake = float(request.data.get('stake', 0))
+        
+        try:
+            stake = float(request.data.get('stake', 0))
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid stake amount"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not selections_data:
             return Response({"error": "No selections provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # --- STEP 1: CREATE THE SLIP ONCE (Outside the loop) ---
-        # Calculate the total odds and potential win for the WHOLE slip first
-        total_odds = 1.0
+        if stake <= 0:
+            return Response({"error": "Stake must be greater than 0"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 🛑 BUG FIX 1: Prevent duplicate games in the same bet slip
+        seen_match_ids = set()
         for s in selections_data:
-            total_odds *= float(s['odds'])
+            match_id = s.get('matchId')
+            if not match_id:
+                return Response({"error": "Missing matchId in selections"}, status=status.HTTP_400_BAD_REQUEST)
+            if match_id in seen_match_ids:
+                return Response({"error": "You cannot add the same match to a betslip more than once"}, status=status.HTTP_400_BAD_REQUEST)
+            seen_match_ids.add(match_id)
+
+        # 🛑 BUG FIX 2: Strict Wallet Check (Prevents going into negative balances)
+        # select_for_update() locks the wallet row until the request finishes, preventing race conditions
+        wallet = Wallet.objects.select_for_update().get(user=request.user)
+        if wallet.balance < stake:
+            return Response({"error": "Insufficient balance to place this bet"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Calculate total odds
+        total_odds = 1.0
+        try:
+            for s in selections_data:
+                total_odds *= float(s['odds'])
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid odds provided"}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Create Master BetSlip
         master_slip = BetSlip.objects.create(
             user=request.user,
             total_stake=stake,
@@ -46,8 +79,7 @@ class PlaceBetView(generics.CreateAPIView):
             status='pending'
         )
 
-        # --- STEP 2: DYNAMIC DATABASE SEEDING (Guarantees relational targets exist) ---
-        # Safeguard for missing bet type configurations
+        # Dynamic Database Seeding Fallbacks
         default_bet_type, _ = BetType.objects.get_or_create(
             id=1,
             defaults={
@@ -57,7 +89,6 @@ class PlaceBetView(generics.CreateAPIView):
             }
         )
 
-        # Safeguard for default parent sport mapping
         default_sport, _ = Team.objects.model._meta.get_field('league').related_model._meta.get_field('sport').related_model.objects.get_or_create(
             id=1,
             defaults={
@@ -66,33 +97,22 @@ class PlaceBetView(generics.CreateAPIView):
             }
         )
 
-        # --- STEP 3: LINK SELECTIONS TO THE MASTER SLIP ---
+        # Link Selections
         for sel in selections_data:
-            # 1. Handle Missing League fallback cleanly via the default sport record
             league_obj, _ = League.objects.get_or_create(
                 name="General League",
                 defaults={'sport': default_sport}
             )
 
-            # 2. Split the matchName string into Home and Away
-            # "Sunderland vs Nottingham Forest" -> ["Sunderland", "Nottingham Forest"]
             match_name = sel.get('matchName', 'Home vs Away')
             teams = match_name.split(' vs ')
             home_name = teams[0].strip()
             away_name = teams[1].strip() if len(teams) > 1 else "Away Team"
 
-            # 3. Get or Create Teams
-            home_team_obj, _ = Team.objects.get_or_create(
-                name=home_name,
-                defaults={'league': league_obj}
-            )
-            away_team_obj, _ = Team.objects.get_or_create(
-                name=away_name,
-                defaults={'league': league_obj}
-            )
+            home_team_obj, _ = Team.objects.get_or_create(name=home_name, defaults={'league': league_obj})
+            away_team_obj, _ = Team.objects.get_or_create(name=away_name, defaults={'league': league_obj})
 
-            # 4. Get or Create Match
-            match_obj, created = Match.objects.get_or_create(
+            match_obj, _ = Match.objects.get_or_create(
                 external_id=sel['matchId'],
                 defaults={
                     'league': league_obj,
@@ -103,7 +123,6 @@ class PlaceBetView(generics.CreateAPIView):
                 }
             )
 
-            # 5. Link to the single master_slip (Duplicate execution block removed)
             Bet.objects.create(
                 slip=master_slip,
                 user=request.user,
@@ -115,82 +134,41 @@ class PlaceBetView(generics.CreateAPIView):
                 status='pending'
             )
 
-        # --- STEP 4: DEDUCT WALLET ONCE ---
-        wallet = request.user.wallet
-        wallet.balance = F('balance') - stake
+        # Deduct wallet securely 
+        wallet.balance -= stake
         wallet.save()
 
-        return Response({"message": "Slip placed!"}, status=201)
-
-    def perform_custom_create(self, serializer):
-        user = self.request.user
-        wallet = user.wallet
-        stake = serializer.validated_data['stake']
-
-        wallet.refresh_from_db()
-        if wallet.balance < stake:
-            raise serializers.ValidationError("Insufficient balance")
-
-        # Deduct balance
-        wallet.balance = F('balance') - stake
-        wallet.save()
-        
-        # Save Bet
-        bet = serializer.save(user=user)
-
-        # Record Transaction
+        # Record explicit transaction history
         Transaction.objects.create(
-            user=user,
+            user=request.user,
             amount=stake,
             transaction_type='debit',
-            description=f"Bet placed: {bet.match.home_team.name} vs {bet.match.away_team.name}",
-            reference=f"BET_{bet.id}"
+            status='completed',
+            description=f"Bet placed for Slip #{master_slip.id}",
+            reference=f"BET-SLIP-{master_slip.id}"
         )
 
-        # Update user stats
-        user.total_bets = F('total_bets') + 1
-        user.save()
-        
-        return bet
-    
-    @transaction.atomic
-    def perform_create(self, serializer):
-        user = self.request.user
-        wallet = user.wallet
+        # Update User Stats counter
+        request.user.total_bets = F('total_bets') + 1
+        request.user.save(update_fields=['total_bets'])
 
-        # 🔥 SAFE balance check
-        wallet.refresh_from_db()
-        if wallet.balance < serializer.validated_data['stake']:
-            raise serializers.ValidationError("Insufficient balance")
-
-        # Create bet
-        bet = serializer.save(user=user)
-
-        # 🔥 SAFE deduction
-        wallet.balance = F('balance') - bet.stake
-        wallet.save()
-        wallet.refresh_from_db()
-
-        # Transaction
-        Transaction.objects.create(
-            user=user,
-            amount=bet.stake,
-            transaction_type='debit',
-            description=f"Bet placed on {bet.match}",
-            reference=f"BET_{bet.id}"
-        )
-
-        user.total_bets += 1
-        user.save()
-
-        return bet
+        return Response({"message": "Slip placed!", "slip_id": master_slip.id}, status=status.HTTP_201_CREATED)
 
 class MyBetsView(generics.ListAPIView):
-    serializer_class = BetSerializer
+    # ✅ Swapped to your custom master card serializer
+    serializer_class = BetSlipHistorySerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Bet.objects.filter(user=self.request.user).order_by('-created_at')
+        # 1. Query the BetSlip model instead of the individual Bet model
+        # 2. Prefetch 'selections' (related_name on your Bet model) and deeply prefetch teams/leagues to keep queries fast
+        return BetSlip.objects.filter(user=self.request.user)\
+            .prefetch_related(
+                'selections__match__home_team', 
+                'selections__match__away_team',
+                'selections__match__league'
+            )\
+            .order_by('-created_at')
 
 class PendingBetsView(generics.ListAPIView):
     serializer_class = BetSerializer
