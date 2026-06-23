@@ -40,6 +40,15 @@ interface User {
   is_superuser?: boolean;
 }
 
+interface RegisterData {
+  username: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  phone_number?: string;
+  country_id: number;
+  preferred_currency_id?: number;
+}
 
 interface AuthState {
   user: User | null;
@@ -48,12 +57,14 @@ interface AuthState {
   isLoading: boolean;
   isHydrated: boolean;
   setHydrated: (state: boolean) => void;
+  setUser: (user: User | null) => void; // Added to satisfy the wallet page balance updates
 
+  // Updated signatures to match actual implementation return types
   login: (
     identifier: string,
     password: string,
     loginType?: 'email' | 'phone'
-  ) => Promise<void>;
+  ) => Promise<{ user: any; token: any }>;
 
   register: (userData: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
@@ -65,15 +76,6 @@ interface AuthState {
   checkAuth: () => Promise<boolean>;
   refreshExchangeRates: () => Promise<void>;
 }
-interface RegisterData {
-  username: string;
-  email: string;
-  password: string;
-  confirm_password: string;
-  phone_number?: string;
-  country_id: number;
-  preferred_currency_id?: number;
-}
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -82,6 +84,11 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      isHydrated: false,
+
+      setHydrated: (state: boolean) => set({ isHydrated: state }),
+      
+      setUser: (user: User | null) => set({ user }),
 
       login: async (identifier: string, password: string, loginType: 'email' | 'phone' = 'email') => {
         set({ isLoading: true });
@@ -166,27 +173,27 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-              try {
-                // Attempt to notify backend (standard practice for JWT blacklist)
-                const refresh = localStorage.getItem('refresh_token');
-                await apiClient.post(API_ENDPOINTS.auth.logout, { refresh });
-              } catch (error) {
-                console.error('Logout error:', error);
-              } finally {
-                // Always clear local state even if API call fails
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                set({
-                user: null,
-                token: null,
-                isAuthenticated: false
-              });
-                toast.success('Logged out successfully');
-                window.location.href = '/auth'; // Redirect to your unified auth page
-              }
-            },
+        try {
+          // Attempt to notify backend (standard practice for JWT blacklist)
+          const refresh = localStorage.getItem('refresh_token');
+          await apiClient.post(API_ENDPOINTS.auth.logout, { refresh });
+        } catch (error) {
+          console.error('Logout error:', error);
+        } finally {
+          // Always clear local state even if API call fails
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false
+          });
+          toast.success('Logged out successfully');
+          window.location.href = '/auth'; // Redirect to your unified auth page
+        }
+      },
 
-updateProfile: async (data: Partial<User>) => {
+      updateProfile: async (data: Partial<User>) => {
         set({ isLoading: true });
         try {
           const response = await apiClient.put(API_ENDPOINTS.auth.updateProfile, data);
@@ -241,61 +248,62 @@ updateProfile: async (data: Partial<User>) => {
           // ✅ FIXED: Safely target the correct payload signature for session hydration
           const resData = (response as any)?.data || response;
           
-        set({
-          user: resData.user || resData,
-          token: localStorage.getItem('access_token'),
-          isAuthenticated: true
-        });
-                  
+          set({
+            user: resData.user || resData,
+            token: localStorage.getItem('access_token'),
+            isAuthenticated: true
+          });
+                    
           return true;
         } catch (error) {
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false
-        });
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false
+          });
 
-        return false;
-      }
+          return false;
+        }
       },
-    refreshExchangeRates: async () => {
-            try {
-              const response = await apiClient.get(API_ENDPOINTS.currencies.exchangeRates);
-              
-              // ✅ FIXED: Unbox rates dictionary from the Axios wrapper layout payload safely
-              const resData = (response as any)?.data || response;
-              
-              const { user } = get();
-              if (user?.preferred_currency && resData.rates) {
-                const updatedCurrency = {
-                  ...user.preferred_currency,
-                  exchange_rate_to_kES: resData.rates[user.preferred_currency.code] || user.preferred_currency.exchange_rate_to_kES
-                };
-                
-                set({
-                  user: {
-                    ...user,
-                    preferred_currency: updatedCurrency
-                  }
-                });
+
+      refreshExchangeRates: async () => {
+        try {
+          const response = await apiClient.get(API_ENDPOINTS.currencies.exchangeRates);
+          
+          // ✅ FIXED: Unbox rates dictionary from the Axios wrapper layout payload safely
+          const resData = (response as any)?.data || response;
+          
+          const { user } = get();
+          if (user?.preferred_currency && resData.rates) {
+            const updatedCurrency = {
+              ...user.preferred_currency,
+              exchange_rate_to_kES: resData.rates[user.preferred_currency.code] || user.preferred_currency.exchange_rate_to_kES
+            };
+            
+            set({
+              user: {
+                ...user,
+                preferred_currency: updatedCurrency
               }
-            } catch (error) {
-              console.error('Failed to refresh exchange rates:', error);
-            }
-          },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to refresh exchange rates:', error);
+        }
+      },
     }),
-{
-  name: 'auth-storage',
+    {
+      name: 'auth-storage',
 
-  partialize: (state) => ({
-    user: state.user,
-    token: state.token,
-    isAuthenticated: state.isAuthenticated,
-  }),
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+      }),
 
-  onRehydrateStorage: () => (state) => {
-    state?.setHydrated(true);
-  },
-}
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
+    }
   )
 );

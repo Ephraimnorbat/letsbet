@@ -51,3 +51,11 @@ celery -A api beat -l info
 python -m daphne -b 127.0.0.1 -p 8000 api.asgi:application
 
 python manage.py run_crash_engine
+
+
+###how to restart the services
+sudo systemctl restart letsbet-gunicorn.service
+sudo systemctl restart letsbet-daphne.service
+sudo systemctl restart letsbet-celery.service
+sudo systemctl restart letsbet-celerybeat.service
+sudo systemctl restart letsbet-next.service

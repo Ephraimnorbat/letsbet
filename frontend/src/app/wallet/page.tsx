@@ -62,13 +62,12 @@ export default function WalletPage() {
       });
 
       // 🚀 THE SYNC FIX: Push the freshly retrieved balance into the global auth store state
-      if (authStore && authStore.setUser && user) {
-        authStore.setUser({
-          ...user,
-          balance: latestBalance // Updates any components listening to authStore.user
-        });
-      }
-
+    if (authStore && (authStore as any).setUser && user) {
+      (authStore as any).setUser({
+        ...user,
+        balance: latestBalance
+      });
+    }
       setTransactions(tData?.results ?? tData ?? []);
     } catch (err) {
       console.error('Wallet fetch error:', err);

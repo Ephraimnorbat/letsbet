@@ -227,8 +227,7 @@ export default function AuthPage() {
         toast.success('Login successful!');
 
         // Extract user metrics seamlessly from newly serialized JSON properties
-        const targetUser = authResponse?.user || useAuthStore.getState().user;
-        
+        const targetUser = (authResponse as any)?.user || useAuthStore.getState().user;        
         if (targetUser?.is_superuser || targetUser?.is_staff) {
           router.push('/uni/admin');
         } else {
