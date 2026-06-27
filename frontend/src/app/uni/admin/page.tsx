@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import AdminDeposits from './components/AdminDeposits';
+import AdminWithdrawals from './components/AdminWithdrawals';
+
 // --- TS Type Definitions ---
 interface SystemMetric {
   active_players: number;
@@ -60,7 +63,7 @@ export default function SuperAdminDashboard() {
   const router = useRouter();
   
   // Adjusted for Fixtures Matrix integration
-  const [activeTab, setActiveTab] = useState<'telemetry' | 'users' | 'wallets' | 'fixtures'>('telemetry');
+  const [activeTab, setActiveTab] = useState<'telemetry' | 'users' | 'wallets' | 'fixtures' | 'deposits' | 'withdrawals'>('telemetry');
   const [fixtureSubTab, setFixtureSubTab] = useState<'matches' | 'leagues'>('matches');
   
   // Real-time Dynamic Data Matrix Hooks
@@ -101,11 +104,11 @@ export default function SuperAdminDashboard() {
   const [apiResponsePayload, setApiResponsePayload] = useState<string>('// Execute an endpoint control to view live JSON output data.');
 
   const systemEndpoints: EndpointRoute[] = [
-    { name: 'Fetch System State', method: 'GET', path: '/api/casino/crash/state/', category: 'Game Control', description: 'Returns current multiplier sequence metrics and timeline.' },
-    { name: 'Force Crash Engine', method: 'POST', path: '/api/casino/crash/force-crash/', category: 'Game Control', description: 'Triggers emergency sequence flight drop execution sequence.' },
-    { name: 'Adjust House Edge', method: 'POST', path: '/api/casino/crash/settings/', category: 'Game Control', description: 'Updates math margins, calculation seeds, and maximum limits.' },
-    { name: 'Bulk Fetch Accounts', method: 'GET', path: '/api/accounts/profiles/admin-list/', category: 'User Registry', description: 'Fetches structural user payload registry records.' },
-    { name: 'Flush Connection Sockets', method: 'DELETE', path: '/api/security/flush-sessions/', category: 'Security', description: 'Terminals zombie WebSocket channels and flushes memory pools.' },
+    { name: 'Fetch System State', method: 'GET', path: '/casino/crash/state/', category: 'Game Control', description: 'Returns current multiplier sequence metrics and timeline.' },
+    { name: 'Force Crash Engine', method: 'POST', path: '/casino/crash/force-crash/', category: 'Game Control', description: 'Triggers emergency sequence flight drop execution sequence.' },
+    { name: 'Adjust House Edge', method: 'POST', path: '/casino/crash/settings/', category: 'Game Control', description: 'Updates math margins, calculation seeds, and maximum limits.' },
+    { name: 'Bulk Fetch Accounts', method: 'GET', path: '/auth/profiles/admin-list/', category: 'User Registry', description: 'Fetches structural user payload registry records.' },
+    { name: 'Flush Connection Sockets', method: 'DELETE', path: '/security/flush-sessions/', category: 'Security', description: 'Terminals zombie WebSocket channels and flushes memory pools.' },
   ];
 
   // --- IDENTITY ENFORCEMENT GUARD ---
@@ -137,13 +140,13 @@ export default function SuperAdminDashboard() {
     
     setIsSyncing(true);
     try {
-      const metricRes = await apiClient.get('/api/casino/crash/admin-metrics/');
+      const metricRes = await apiClient.get('/casino/crash/admin-metrics/');
       if (metricRes?.data) setMetrics(metricRes.data);
 
-      const usersRes = await apiClient.get('/api/accounts/profiles/admin-list/');
+      const usersRes = await apiClient.get('/auth/profiles/admin-list/');
       if (usersRes?.data) setUserRegistry(usersRes.data);
 
-      const walletsRes = await apiClient.get('/api/wallet/admin-audit/');
+      const walletsRes = await apiClient.get('/wallet/admin-audit/');
       if (walletsRes?.data) setWalletRegistry(walletsRes.data);
 
       // Fetch Sports Book Datasets
@@ -198,7 +201,7 @@ console.log("TEAMS PAYLOAD RAW:", teamsRes.status === 'fulfilled' ? teamsRes.val
       return toast.error('Password specification must contain at least 6 characters.');
     }
     try {
-      await apiClient.post(`/api/accounts/profiles/${userId}/admin-change-password/`, { password: newPassword });
+      await apiClient.post(`/auth/profiles/${userId}/admin-change-password/`, { password: newPassword });
       toast.success(`Credentials overwritten for ${username}`);
     } catch (err) {
       toast.error('Failed to change password. Verify your admin session privileges.');
@@ -211,7 +214,7 @@ console.log("TEAMS PAYLOAD RAW:", teamsRes.status === 'fulfilled' ? teamsRes.val
     if (isNaN(parsedAmount) || parsedAmount <= 0) return toast.error('Invalid monetary amount requested.');
 
     try {
-      await apiClient.post(`/api/wallet/admin-adjust/`, { user_id: userId, amount: parsedAmount, action: type });
+      await apiClient.post(`/wallet/admin-adjust/`, { user_id: userId, amount: parsedAmount, action: type });
       toast.success('Ledger sequence adjusted cleanly');
       syncPlatformState();
     } catch (err) {
@@ -361,6 +364,19 @@ if (
             className={`px-5 py-3 text-xs font-mono font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap ${activeTab === 'fixtures' ? 'border-red-500 text-white bg-red-500/5' : 'border-transparent text-slate-400 hover:text-white'}`}
           >
             Sports Book Bookmaking
+          </button>
+          <button 
+            onClick={() => setActiveTab('deposits')}
+            className={`px-5 py-3 text-xs font-mono font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap ${activeTab === 'deposits' ? 'border-red-500 text-white bg-red-500/5' : 'border-transparent text-slate-400 hover:text-white'}`}
+          >
+            Payment Transactions Matrix (Deposits)
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('withdrawals')}
+            className={`px-5 py-3 text-xs font-mono font-black uppercase tracking-wider border-b-2 transition whitespace-nowrap ${activeTab === 'withdrawals' ? 'border-red-500 text-white bg-red-500/5' : 'border-transparent text-slate-400 hover:text-white'}`}
+          >
+            Settlements Queue (Withdrawals)
           </button>
         </div>
 
@@ -639,6 +655,8 @@ if (
             </div>
           </div>
         )}
+        {activeTab === 'deposits' && <AdminDeposits />}
+        {activeTab === 'withdrawals' && <AdminWithdrawals />}
 
       </div>
 
@@ -652,21 +670,78 @@ if (
             </div>
             <form onSubmit={handleMatchSubmit} className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase mb-1">Home Team</label>
-                  <select required value={matchForm.home_team} onChange={e => setMatchForm({...matchForm, home_team: e.target.value})} className="w-full bg-slate-950 border border-slate-800 p-2.5 text-xs rounded-lg text-white">
-                    <option value="">Select Team</option>
-                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase mb-1">Away Team</label>
-                  <select required value={matchForm.away_team} onChange={e => setMatchForm({...matchForm, away_team: e.target.value})} className="w-full bg-slate-950 border border-slate-800 p-2.5 text-xs rounded-lg text-white">
-                    <option value="">Select Team</option>
-                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-              </div>
+  <div>
+    <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase mb-1">
+      Home Team
+    </label>
+
+    <select
+      required
+      value={matchForm.home_team}
+      onChange={e =>
+        setMatchForm({
+          ...matchForm,
+          home_team: e.target.value
+        })
+      }
+      className="w-full bg-slate-950 border border-slate-800 p-2.5 text-xs rounded-lg text-white"
+    >
+      <option value="">
+        {teams.length === 0
+          ? 'No teams available'
+          : `Select Team (${teams.length})`}
+      </option>
+
+      {teams.map((team) => (
+        <option key={team.id} value={team.id}>
+          {team.name}
+          {team.league_name
+            ? ` (${team.league_name})`
+            : ''}
+        </option>
+      ))}
+    </select>
+
+    {teams.length === 0 && (
+      <p className="text-red-400 text-[10px] mt-1">
+        No teams found. Create teams first from Django Admin.
+      </p>
+    )}
+  </div>
+
+  <div>
+    <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase mb-1">
+      Away Team
+    </label>
+
+    <select
+      required
+      value={matchForm.away_team}
+      onChange={e =>
+        setMatchForm({
+          ...matchForm,
+          away_team: e.target.value
+        })
+      }
+      className="w-full bg-slate-950 border border-slate-800 p-2.5 text-xs rounded-lg text-white"
+    >
+      <option value="">
+        {teams.length === 0
+          ? 'No teams available'
+          : `Select Team (${teams.length})`}
+      </option>
+
+      {teams.map((team) => (
+        <option key={team.id} value={team.id}>
+          {team.name}
+          {team.league_name
+            ? ` (${team.league_name})`
+            : ''}
+        </option>
+      ))}
+    </select>
+  </div>
+</div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

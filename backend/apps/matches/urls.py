@@ -2,6 +2,10 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    SportViewSet,
+    LeagueViewSet,
+    TeamViewSet,
+    MatchViewSet,
     AvailableSportsAPIView,
     LeagueOddsAPIView,
     LiveScoresAPIView,
@@ -13,9 +17,17 @@ from .views import (
     MatchResultsAPIView
 )
 
+# 1. Initialize the router
 router = DefaultRouter()
 
+# 2. 🔥 REGISTER THE VIEWSETS (This fixes the blank dropdowns!)
+router.register(r'sports', SportViewSet, basename='sport')
+router.register(r'leagues', LeagueViewSet, basename='league')
+router.register(r'teams', TeamViewSet, basename='team')
+router.register(r'local-matches', MatchViewSet, basename='local-match')
+
 urlpatterns = [
+    # This includes the auto-generated CRUD routes for your dropdowns
     path('', include(router.urls)),
 
     # ✅ MAIN ENDPOINT (USE THIS IN FRONTEND)

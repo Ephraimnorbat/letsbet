@@ -14,10 +14,28 @@ class Sport(models.Model):
         return self.name
 
 class League(models.Model):
+    DATA_SOURCE_CHOICES = [
+        ('external', 'External API'),
+        ('local', 'Local'),
+    ]
+
     name = models.CharField(max_length=200)
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='leagues')
     country = models.CharField(max_length=100)
-    external_key = models.CharField(max_length=100, unique=True, null=True, blank=True)
+
+    external_key = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True
+    )
+
+    source = models.CharField(
+        max_length=20,
+        choices=DATA_SOURCE_CHOICES,
+        default='local'
+    )
+
     logo = models.ImageField(upload_to='leagues/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -30,9 +48,32 @@ class League(models.Model):
         return f"{self.name} ({self.country})"
 
 class Team(models.Model):
+    DATA_SOURCE_CHOICES = [
+        ('external', 'External API'),
+        ('local', 'Local'),
+    ]
+
     name = models.CharField(max_length=200)
     short_name = models.CharField(max_length=50)
-    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='teams')
+    league = models.ForeignKey(
+        League,
+        on_delete=models.CASCADE,
+        related_name='teams'
+    )
+
+    external_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True
+    )
+
+    source = models.CharField(
+        max_length=20,
+        choices=DATA_SOURCE_CHOICES,
+        default='local'
+    )
+
     logo = models.ImageField(upload_to='teams/', null=True, blank=True)
     founded_year = models.IntegerField(null=True, blank=True)
     stadium = models.CharField(max_length=200, blank=True)
@@ -47,6 +88,12 @@ class Team(models.Model):
         return self.name
 
 class Match(models.Model):
+    DATA_SOURCE_CHOICES = [
+    ('external', 'External API'),
+    ('local', 'Local'),
+]
+
+
     STATUS_CHOICES = [
         ('scheduled', 'Scheduled'),
         ('live', 'Live'),
@@ -62,6 +109,12 @@ class Match(models.Model):
     match_date = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     external_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+
+    source = models.CharField(
+    max_length=20,
+    choices=DATA_SOURCE_CHOICES,
+    default='local'
+)
     
     # Scores
     home_score = models.IntegerField(default=0)

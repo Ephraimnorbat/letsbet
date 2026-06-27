@@ -110,3 +110,11 @@ class TransactionHistoryView(generics.ListAPIView):
     def get_queryset(self):
         return Transaction.objects.filter(user=self.request.user).order_by('-created_at')
     
+# class AdminDepositsView(APIView):
+#     permission_classes = [IsAdminUser]  # Lock it down to admins only
+
+#     def get(self, request):
+#         # Fetching all deposits (ordered by newest first)
+#         deposits = Deposit.objects.all().order_by('-created_at')
+#         serializer = DepositSerializer(deposits, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)

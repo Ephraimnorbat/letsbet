@@ -13,6 +13,8 @@ from django.conf import settings
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import requests
+from rest_framework.permissions import IsAdminUser
+from django.shortcuts import get_object_or_404
 
 # App Imports
 from apps.wallet.models import Wallet, Transaction, Currency  # Added Currency mapping relation here
@@ -215,3 +217,130 @@ class NowPaymentsWebhookView(APIView):
                 return Response({"error": "Failed to process ledger balance credit"}, status=500)
 
         return Response({"status": "ok"})
+    
+
+
+class AdminDepositsListView(APIView):
+    """
+    Administrative Ledger: Returns all global crypto payment transactions
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        transactions = PaymentTransaction.objects.select_related('user').all().order_by('-created_at')
+        
+        data = []
+        for tx in transactions:
+            data.append({
+                "id": str(tx.id),
+                "order_id": tx.order_id,
+                "payment_id": tx.payment_id,
+                "username": tx.user.username,
+                "email": tx.user.email,
+                # 🔥 Fixed here: Changed 'wth' to 'tx'
+                "user": {
+                    "id": tx.user.id,
+                    "username": tx.user.username,
+                    "email": tx.user.email,
+                },
+                "price_amount": float(tx.price_amount),
+                "price_currency": tx.price_currency,
+                "pay_amount": float(tx.pay_amount) if tx.pay_amount else None,
+                "pay_currency": tx.pay_currency,
+                "status": tx.status,
+                "is_credited": tx.is_credited,
+                "created_at": tx.created_at.isoformat(),
+            })
+            
+        return Response(data)
+
+
+class AdminWithdrawalsListView(APIView):
+    """
+    Administrative Queue: Returns all global manual payout requests
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        withdrawals = WithdrawalRequest.objects.select_related('user').all().order_by('-created_at')
+        
+        data = []
+        for wth in withdrawals:
+            data.append({
+                "id": wth.id,
+                "amount": float(wth.amount),
+                "currency": wth.currency,
+                "withdrawal_method": wth.withdrawal_method,
+                "address_details": wth.address_details,
+                "status": wth.status,
+                "admin_notes": wth.admin_notes,
+                "created_at": wth.created_at.isoformat(),
+                
+                # 🔥 Shotgun approach: Add every key variation the UI might be evaluating
+                "username": wth.user.username,
+                "email": wth.user.email,
+                "user_name": wth.user.username,
+                "user_id": wth.user.id,
+                "user": {
+                    "id": wth.user.id,
+                    "username": wth.user.username,
+                    "email": wth.user.email,
+                },
+                "user_details": {
+                    "id": wth.user.id,
+                    "username": wth.user.username,
+                    "email": wth.user.email,
+                }
+            })
+            
+        return Response(data)
+    
+
+
+
+class ProcessWithdrawalView(APIView):
+    """
+    Administrative Execution: Approve or Reject a manual settlement queue request
+    """
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        action = request.data.get("action")  # 'approve' or 'reject'
+        admin_notes = request.data.get("admin_notes", "")
+
+        if action not in ['approve', 'reject']:
+            return Response({"error": "Valid action ('approve' or 'reject') required"}, status=400)
+
+        with db_transaction.atomic():
+            # Secure the withdrawal request instance
+            withdrawal = get_object_or_404(WithdrawalRequest.objects.select_for_update(), pk=pk)
+
+            if withdrawal.status != 'pending':
+                return Response({"error": "This transaction has already been processed"}, status=400)
+
+            if action == 'approve':
+                withdrawal.status = 'approved'
+                withdrawal.admin_notes = admin_notes
+                withdrawal.save()
+
+                # Update corresponding ledger Transaction status to completed
+                Transaction.objects.filter(reference=f"WTH-{withdrawal.id}").update(status='completed')
+
+            elif action == 'reject':
+                withdrawal.status = 'rejected'
+                withdrawal.admin_notes = admin_notes
+                withdrawal.save()
+
+                # Reverse funds back to user's wallet profile
+                wallet, _ = Wallet.objects.select_for_update().get_or_create(user=withdrawal.user)
+                wallet.balance += withdrawal.amount
+                wallet.total_withdrawn -= withdrawal.amount
+                wallet.save()
+
+                # Mark corresponding Transaction ledger line as failed/cancelled
+                Transaction.objects.filter(reference=f"WTH-{withdrawal.id}").update(
+                    status='failed', 
+                    description=f"Rejected: {admin_notes}"
+                )
+
+        return Response({"message": f"Withdrawal request successfully marked as {withdrawal.status}."})
