@@ -5,6 +5,10 @@ from django.contrib.auth import get_user_model
 from .helpers import resolve_user_currency
 from .models import UserProfile, LoginHistory, Country, Currency
 
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_decode
+from django.utils.encoding import force_str
+
 User = get_user_model()
 
 
@@ -140,3 +144,44 @@ class ChangePasswordSerializer(serializers.Serializer):
         if data['new_password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
         return data
+
+
+
+#password reset function
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate_email(self, value):
+        if not User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("No user is registered with this email address.")
+        return value
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uidb64 = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=8, write_only=True)
+    confirm_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        
+        try:
+            uid = force_str(urlsafe_base64_decode(data['uidb64']))
+            self.user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError({"error": "Invalid or corrupted user identifier."})
+
+        if not default_token_generator.check_token(self.user, data['token']):
+            raise serializers.ValidationError({"token": "The reset token is invalid or has expired."})
+
+        return data
+
+    def save(self):
+        # The user was verified during the validation hook above
+        self.user.set_password(self.validated_data['new_password'])
+        self.user.save()
+        return self.user

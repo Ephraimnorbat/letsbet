@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Eye, EyeOff, Mail, Phone, Lock, User, AlertCircle, 
-  Globe, DollarSign, CheckCircle, ChevronDown 
+  Globe, DollarSign, CheckCircle, ChevronDown, ArrowLeft 
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -35,20 +35,29 @@ interface Currency {
   exchange_rate_to_KES?: number;
 }
 
+// 🚀 Upgraded Mode Types
+type AuthMode = 'login' | 'register' | 'forgot';
+
 export default function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, register, isLoading } = useAuthStore();
+  const { login, register, isLoading: authLoading } = useAuthStore();
   
-  const mode = searchParams.get('mode');
-  const [isLogin, setIsLogin] = useState(mode !== 'register');
+  const initialMode = searchParams.get('mode');
+  
+  // State Machine Mode Controller
+  const [mode, setMode] = useState<AuthMode>(
+    initialMode === 'register' ? 'register' : 'login'
+  );
+  
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loginType, setLoginType] = useState<'email' | 'phone'>('email');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+  const [sendingResetLink, setSendingResetLink] = useState(false);
   
-  // 🚀 Local flag to lock the global auth routing logic during dynamic login sequences
+  // Local flag to lock the global auth routing logic during dynamic login sequences
   const [isRedirecting, setIsRedirecting] = useState(false);
   
   const [countries, setCountries] = useState<Country[]>([]);
@@ -163,15 +172,25 @@ export default function AuthPage() {
       }
     };
 
-    if (countries.length > 0 && !isLogin && !formData.countryId) {
+    if (countries.length > 0 && mode === 'register' && !formData.countryId) {
       detectCountry();
     }
-  }, [countries.length, isLogin, formData.countryId]);
+  }, [countries.length, mode, formData.countryId]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!isLogin) {
+    if (mode === 'forgot') {
+      if (!formData.email) {
+        newErrors.email = 'Email is required';
+      } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+        newErrors.email = 'Email is invalid';
+      }
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    }
+
+    if (mode === 'register') {
       if (!formData.username) {
         newErrors.username = 'Username is required';
       } else if (formData.username.length < 3) {
@@ -179,7 +198,7 @@ export default function AuthPage() {
       }
     }
 
-    if (loginType === 'email' || !isLogin) {
+    if (loginType === 'email' || mode === 'register') {
       if (!formData.email) {
         newErrors.email = 'Email is required';
       } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
@@ -187,7 +206,7 @@ export default function AuthPage() {
       }
     }
 
-    if (loginType === 'phone' || !isLogin) {
+    if (loginType === 'phone' || mode === 'register') {
       if (!formData.phone) {
         newErrors.phone = 'Phone number is required';
       }
@@ -199,7 +218,7 @@ export default function AuthPage() {
       newErrors.password = 'Password must be at least 8 characters';
     }
 
-    if (!isLogin) {
+    if (mode === 'register') {
       if (formData.password !== formData.confirmPassword) {
         newErrors.confirmPassword = 'Passwords do not match';
       }
@@ -216,8 +235,27 @@ export default function AuthPage() {
     e.preventDefault();
     if (!validateForm()) return;
 
+    if (mode === 'forgot') {
+      setSendingResetLink(true);
+      try {
+        await apiClient.post(API_ENDPOINTS.auth.passwordResetRequest, {
+          email: formData.email
+        });
+        toast.success('Password reset link has been sent to your email.');
+        setMode('login');
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.email || 
+                        error.response?.data?.error || 
+                        'Failed to request reset link';
+        toast.error(typeof errorMsg === 'string' ? errorMsg : 'No profile associated with this email.');
+      } finally {
+        setSendingResetLink(false);
+      }
+      return;
+    }
+
     try {
-      if (isLogin) {
+      if (mode === 'login') {
         const structuralIdentifier = loginType === 'email' ? formData.email : formData.phone;
         
         // Lock background guards from conflicting with this programmatic transition
@@ -263,8 +301,8 @@ export default function AuthPage() {
     }
   };
 
-  const toggleMode = () => {
-    setIsLogin(!isLogin);
+  const changeMode = (newMode: AuthMode) => {
+    setMode(newMode);
     setFormData({
       email: '', phone: '', username: '', password: '', confirmPassword: '', countryId: '', currencyId: '',
     });
@@ -283,42 +321,56 @@ export default function AuthPage() {
           className="bg-slate-900 border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden"
         >
           {/* Header Card Band */}
-          <div className="bg-slate-850 border-b border-slate-800/60 p-6 text-white text-center">
+          <div className="bg-slate-850 border-b border-slate-800/60 p-6 text-white text-center relative">
+            {mode === 'forgot' && (
+              <button
+                type="button"
+                onClick={() => changeMode('login')}
+                className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors flex items-center gap-1 text-xs uppercase tracking-wider font-bold"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+            )}
             <h1 className="text-2xl font-black tracking-wide uppercase">
               UNIBET <span className="text-blue-500">360</span>
             </h1>
             <p className="text-xs text-gray-400 mt-2">
-              {isLogin ? 'Welcome back to your betting platform' : 'Join the ultimate betting experience'}
+              {mode === 'login' && 'Welcome back to your betting platform'}
+              {mode === 'register' && 'Join the ultimate betting experience'}
+              {mode === 'forgot' && 'Recover access to your account'}
             </p>
           </div>
 
           {/* Form Content Area */}
           <div className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
+              
               {/* Login/Register Toggle Switch */}
-              <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800/40">
-                <button
-                  type="button"
-                  onClick={() => !isLogin && toggleMode()}
-                  className={`flex-1 py-2 px-4 rounded-md transition-all font-bold text-xs uppercase tracking-wide ${
-                    isLogin ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => isLogin && toggleMode()}
-                  className={`flex-1 py-2 px-4 rounded-md transition-all font-bold text-xs uppercase tracking-wide ${
-                    !isLogin ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  Register
-                </button>
-              </div>
+              {mode !== 'forgot' && (
+                <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800/40">
+                  <button
+                    type="button"
+                    onClick={() => changeMode('login')}
+                    className={`flex-1 py-2 px-4 rounded-md transition-all font-bold text-xs uppercase tracking-wide ${
+                      mode === 'login' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => changeMode('register')}
+                    className={`flex-1 py-2 px-4 rounded-md transition-all font-bold text-xs uppercase tracking-wide ${
+                      mode === 'register' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Register
+                  </button>
+                </div>
+              )}
 
               {/* Username Field */}
-              {!isLogin && (
+              {mode === 'register' && (
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Username</label>
                   <div className="relative">
@@ -336,7 +388,7 @@ export default function AuthPage() {
               )}
 
               {/* Login Strategy Multiplexers */}
-              {isLogin && (
+              {mode === 'login' && (
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -356,7 +408,7 @@ export default function AuthPage() {
               )}
 
               {/* Email Address */}
-              {(loginType === 'email' || !isLogin) && (
+              {(loginType === 'email' || mode === 'register' || mode === 'forgot') && (
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Email Address</label>
                   <div className="relative">
@@ -374,7 +426,7 @@ export default function AuthPage() {
               )}
 
               {/* Phone Input */}
-              {(loginType === 'phone' || !isLogin) && (
+              {mode !== 'forgot' && (loginType === 'phone' || mode === 'register') && (
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Phone Number</label>
                   <div className="relative">
@@ -392,7 +444,7 @@ export default function AuthPage() {
               )}
 
               {/* Country Selection */}
-              {!isLogin && (
+              {mode === 'register' && (
                 <div className="relative" ref={countryDropdownRef}>
                   <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Country</label>
                   <div className="relative">
@@ -460,7 +512,7 @@ export default function AuthPage() {
               )}
 
               {/* Preferred Currency Selector */}
-              {!isLogin && (
+              {mode === 'register' && (
                 <div className="relative" ref={currencyDropdownRef}>
                   <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Preferred Currency</label>
                   <div className="relative">
@@ -527,30 +579,32 @@ export default function AuthPage() {
               )}
 
               {/* Password Fields */}
-              <div>
-                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => handleInputChange('password', e.target.value)}
-                    className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-slate-950 text-white ${errors.password ? 'border-red-500' : 'border-slate-800'}`}
-                    placeholder="Enter your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 focus:outline-none"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {mode !== 'forgot' && (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-slate-950 text-white ${errors.password ? 'border-red-500' : 'border-slate-800'}`}
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {errors.password && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.password}</p>}
               </div>
+              )}
 
               {/* Confirm Password Field */}
-              {!isLogin && (
+              {mode === 'register' && (
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Confirm Password</label>
                   <div className="relative">
@@ -577,25 +631,31 @@ export default function AuthPage() {
               {/* Submission Action Button */}
               <button
                 type="submit"
-                disabled={isLoading || (!isLogin && loadingCountries)}
+                disabled={authLoading || sendingResetLink || (mode === 'register' && loadingCountries)}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase text-xs tracking-wider py-3 px-4 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-blue-950/50"
               >
-                {isLoading ? (
+                {authLoading || sendingResetLink ? (
                   <>
                     <LoadingSpinner size="sm" />
-                    {isLogin ? 'Logging in...' : 'Creating account...'}
+                    {mode === 'login' && 'Logging in...'}
+                    {mode === 'register' && 'Creating account...'}
+                    {mode === 'forgot' && 'Sending recovery email...'}
                   </>
                 ) : (
-                  <>{isLogin ? 'Login' : 'Create Account'}</>
+                  <>
+                    {mode === 'login' && 'Login'}
+                    {mode === 'register' && 'Create Account'}
+                    {mode === 'forgot' && 'Send Reset Link'}
+                  </>
                 )}
               </button>
 
               {/* Forgot Password Link */}
-              {isLogin && (
+              {mode === 'login' && (
                 <div className="text-center pt-1">
                   <button
                     type="button"
-                    onClick={() => toast.error('Password reset feature coming soon!')}
+                    onClick={() => changeMode('forgot')}
                     className="text-blue-500 hover:text-blue-400 text-xs font-bold uppercase tracking-wider transition-colors"
                   >
                     Forgot Password?

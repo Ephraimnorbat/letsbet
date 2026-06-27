@@ -1,12 +1,11 @@
 # account/views.py
 
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, viewsets, permissions
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from django.utils import timezone
 from rest_framework.generics import ListAPIView
-from rest_framework import status, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from django.utils.encoding import force_str
@@ -18,6 +17,8 @@ from django.utils.http import urlsafe_base64_decode
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import check_password
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 
 
 from django.conf import settings
@@ -28,9 +29,12 @@ from .models import UserProfile, LoginHistory, Country, Currency
 from .serializers import (
     UserSerializer, UserProfileSerializer, UserDetailSerializer,
     RegisterSerializer, ChangePasswordSerializer, LoginHistorySerializer, 
-    LoginSerializer, CountrySerializer, CurrencySerializer
+    LoginSerializer, CountrySerializer, CurrencySerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+
 )
 
+
+ 
 User = get_user_model()
 
 
@@ -164,6 +168,54 @@ class VerifyEmailView(APIView):
             return Response({'message': 'Account successfully verified!'}, status=status.HTTP_200_OK)
         
         return Response({'error': 'Invalid or expired verification token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            user = User.objects.get(email__iexact=email)
+            
+            # Generate temporary token and encoded payload parameters
+            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            
+            # Construct Next.js URL layout pointer string
+            # In development: http://localhost:3000, in production: your production domain
+            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+            reset_link = f"{frontend_url}/auth/reset-password/{uidb64}/{token}"
+            
+            # Send the transactional update email
+            subject = "Reset Your Password - LetsBet"
+            message = f"Hello {user.username},\n\nYou requested a password reset. Click the link below to set a new password:\n{reset_link}\n\nIf you did not make this request, please ignore this email."
+            
+            try:
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    fail_silently=False,
+                )
+                return Response({'message': 'Password reset link has been sent to your email.'}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({'error': 'Failed to send password reset email. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'message': 'Your password has been reset successfully!'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
