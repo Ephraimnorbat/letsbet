@@ -13,33 +13,27 @@ interface UpcomingMatchesProps {
 }
 
 export default function UpcomingMatches({ sportKey = 'upcoming' }: UpcomingMatchesProps) {
-  const { data: matchesData, isLoading, error, refetch } = useUpcomingMatches(sportKey);
+  // ✅ useUpcomingMatches doesn't accept parameters - it fetches all upcoming matches
+  const { data: matchesData, isLoading, error, refetch } = useUpcomingMatches();
   const { addToBetSlip } = useBettingStore();
   const [selectedOdds, setSelectedOdds] = useState<{ matchId: string | number; selection: string } | null>(null);
 
   // ================= NORMALIZE MATCHES ARRAY SAFELY =================
-  // Checks all possible payload variations (direct array, .results wrap, or .data envelope)
   const normalizeMatches = (data: any): any[] => {
     if (Array.isArray(data)) return data;
-
     if (Array.isArray(data?.results)) return data.results;
-
     if (Array.isArray(data?.data)) return data.data;
-
-    // deep fallback (VERY IMPORTANT)
     if (Array.isArray(data?.results?.data)) return data.results.data;
-
     return [];
   };
 
-const upcomingMatches = normalizeMatches(matchesData);
+  const upcomingMatches = normalizeMatches(matchesData);
 
   const isErrorResponse = 
     (matchesData as any)?.status === 'error' || 
     (typeof matchesData?.status === 'number' && matchesData.status >= 400) || 
     !!error;
     
-  // ✅ FIXED: Entirely wrapped as any to clear the secondary property access flag
   const errorMessage = 
     (matchesData as any)?.data?.message || 
     (matchesData as any)?.message || 
@@ -72,13 +66,30 @@ const upcomingMatches = normalizeMatches(matchesData);
     return (
       <div className="mb-12 p-6 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col items-center justify-center text-center">
         <AlertCircle className="w-8 h-8 text-slate-600 mb-2" />
-        <p className="text-sm text-slate-400 mb-4">{upcomingMatches.length === 0 ? 'No upcoming matches found for this selection.' : errorMessage}</p>
+        <p className="text-sm text-slate-400 mb-4">{upcomingMatches.length === 0 ? 'No upcoming matches found.' : errorMessage}</p>
         <button 
           onClick={() => refetch()} 
           className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white rounded-xl transition"
         >
           <RefreshCw className="w-3.5 h-3.5" /> REFRESH SCHEDULE
         </button>
+      </div>
+    );
+  }
+
+  // Optional: Filter matches by sportKey if provided
+  const filteredMatches = sportKey && sportKey !== 'upcoming'
+    ? upcomingMatches.filter((match: any) => 
+        match.sport_key === sportKey || match.sportKey === sportKey
+      )
+    : upcomingMatches;
+
+  // If filtered matches are empty, show a message
+  if (filteredMatches.length === 0) {
+    return (
+      <div className="mb-12 p-6 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col items-center justify-center text-center">
+        <AlertCircle className="w-8 h-8 text-slate-600 mb-2" />
+        <p className="text-sm text-slate-400">No upcoming matches found for {sportKey.replace(/_/g, ' ')}</p>
       </div>
     );
   }
@@ -99,7 +110,7 @@ const upcomingMatches = normalizeMatches(matchesData);
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {upcomingMatches.slice(0, 6).map((match: any, index: number) => {
+        {filteredMatches.slice(0, 6).map((match: any, index: number) => {
           const matchId = match.id;
           const homeTeam = match.home_team;
           const awayTeam = match.away_team;
@@ -109,7 +120,7 @@ const upcomingMatches = normalizeMatches(matchesData);
           const matchTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           const matchDay = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
           
-          // Pull Odds dynamically from underlying array structures safely
+          // Pull Odds dynamically
           const bookmaker = match.bookmakers?.[0];
           const market = bookmaker?.markets?.find((m: any) => m.key === 'h2h');
           const hOdds = market?.outcomes?.find((o: any) => o.name === homeTeam)?.price || 1.0;

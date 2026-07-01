@@ -30,8 +30,8 @@ interface MatchData {
 }
 
 export default function LiveMatches() {
-  // ✅ Use the hook instead of the service
-  const { data: response, isLoading, error } = useLiveMatches('upcoming');
+  // ✅ useLiveMatches doesn't accept any arguments
+  const { data: response, isLoading, error } = useLiveMatches();
   
   // Extract the live matches from the response
   const liveMatches = response?.data || response || [];

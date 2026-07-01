@@ -5,8 +5,8 @@ import FeaturedSports from '@/components/home/FeaturedSports';
 import UpcomingMatches from '@/components/home/UpcomingMatches';
 
 export default function SportsPage() {
-  // Manage the selected sportKey state, defaulting to 'upcoming'
-  const [selectedLeague, setSelectedLeague] = useState<string>('upcoming');
+  // ✅ Use string | null to match FeaturedSports props
+  const [selectedLeague, setSelectedLeague] = useState<string | null>('upcoming');
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -14,12 +14,12 @@ export default function SportsPage() {
       
       {/* Pass state and state controller dynamically down to child components */}
       <FeaturedSports 
-        activeLeague={selectedLeague} 
+        activeLeague={selectedLeague || 'upcoming'} 
         onLeagueSelect={setSelectedLeague} 
       />
       
       {/* The upcoming matches grid will now automatically refetch when selectedLeague updates */}
-      <UpcomingMatches sportKey={selectedLeague} />
+      <UpcomingMatches sportKey={selectedLeague || 'upcoming'} />
     </div>
   );
 }

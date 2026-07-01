@@ -36,11 +36,36 @@ export class LiveMatchesService {
   async getTeamDetails(teamId: string) {
     try {
       const response = await apiClient.get(API_ENDPOINTS.matches.teams);
-      const teams = response || [];
-      return teams.find((team: any) => team.id === parseInt(teamId)) || null;
+      // ✅ Access the data property from the response
+      const teams = response?.data || response || [];
+      // ✅ Ensure teams is an array before using find
+      if (Array.isArray(teams)) {
+        return teams.find((team: any) => team.id === parseInt(teamId)) || null;
+      }
+      return null;
     } catch (error) {
       console.error('Error fetching team details:', error);
       return null;
+    }
+  }
+
+  async getSports() {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.matches.sports);
+      return response?.data || response || [];
+    } catch (error) {
+      console.error('Error fetching sports:', error);
+      return [];
+    }
+  }
+
+  async getLeagues() {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.matches.leagues);
+      return response?.data || response || [];
+    } catch (error) {
+      console.error('Error fetching leagues:', error);
+      return [];
     }
   }
 }

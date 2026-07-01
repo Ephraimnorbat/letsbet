@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useMatchStatistics, useMatchDetails } from '@/lib/api/hooks/useMatches';
-import { useHomeTeamLineup, useAwayTeamLineup } from '@/lib/api/hooks/useMatches';
 
 export default function MatchDetailPage() {
   const { id } = useParams();
@@ -18,8 +17,6 @@ export default function MatchDetailPage() {
   
   const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useMatchStatistics(id as string);
   const { data: matchData, isLoading: matchLoading } = useMatchDetails(id as string);
-  const { data: homeLineup, isLoading: homeLineupLoading } = useHomeTeamLineup(id as string);
-  const { data: awayLineup, isLoading: awayLineupLoading } = useAwayTeamLineup(id as string);
 
   if (statsLoading || matchLoading) {
     return (
@@ -34,12 +31,15 @@ export default function MatchDetailPage() {
 
   const stats = statsData?.data?.response || statsData?.data || statsData;
   const match = matchData?.data?.response || matchData?.data || matchData;
-  const homeTeam = match?.teams?.home?.name || match?.home_team_name;
-  const awayTeam = match?.teams?.away?.name || match?.away_team_name;
+  const homeTeam = match?.teams?.home?.name || match?.home_team_name || 'Home Team';
+  const awayTeam = match?.teams?.away?.name || match?.away_team_name || 'Away Team';
   const homeScore = match?.goals?.home ?? match?.home_score ?? 0;
   const awayScore = match?.goals?.away ?? match?.away_score ?? 0;
   const matchStatus = match?.fixture?.status?.short || match?.status || 'LIVE';
   const matchTime = match?.fixture?.status?.elapsed || match?.time || '0';
+
+  // ✅ Safe error check - check if statsError exists OR if statsData has an error status
+  const hasError = !!statsError || (statsData && (statsData as any)?.status === 'error');
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -162,8 +162,7 @@ export default function MatchDetailPage() {
           animate={{ opacity: 1 }}
           className="space-y-6"
         >
-          {/* ✅ Fixed: Cast statsData to any or leverage safe double equality conversion thresholds to verify error boundaries */}
-          {!!statsError || (statsData as any)?.status === 'error' || String((statsData as any)?.status).toLowerCase() === 'error' ? (
+          {hasError ? (
             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-8 text-center">
               <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
               <p className="text-gray-400 mb-4">Statistics are currently unavailable</p>
@@ -296,15 +295,9 @@ export default function MatchDetailPage() {
           {/* Home Team Lineup */}
           <div className="bg-slate-800 rounded-xl p-6">
             <h3 className="text-xl font-bold mb-4">{homeTeam}</h3>
-            {homeLineupLoading ? (
-              <div className="animate-pulse space-y-2">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-10 bg-slate-700 rounded"></div>
-                ))}
-              </div>
-            ) : homeLineup?.data?.response ? (
+            {match?.lineups ? (
               <div className="space-y-2">
-                {homeLineup.data.response.map((player: any, idx: number) => (
+                {match.lineups.home?.map((player: any, idx: number) => (
                   <div key={idx} className="flex items-center space-x-3 p-2 hover:bg-slate-700 rounded-lg transition">
                     <span className="text-sm text-gray-400 w-8">{player.number || idx + 1}</span>
                     <span className="font-medium">{player.name}</span>
@@ -320,15 +313,9 @@ export default function MatchDetailPage() {
           {/* Away Team Lineup */}
           <div className="bg-slate-800 rounded-xl p-6">
             <h3 className="text-xl font-bold mb-4">{awayTeam}</h3>
-            {awayLineupLoading ? (
-              <div className="animate-pulse space-y-2">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-10 bg-slate-700 rounded"></div>
-                ))}
-              </div>
-            ) : awayLineup?.data?.response ? (
+            {match?.lineups ? (
               <div className="space-y-2">
-                {awayLineup.data.response.map((player: any, idx: number) => (
+                {match.lineups.away?.map((player: any, idx: number) => (
                   <div key={idx} className="flex items-center space-x-3 p-2 hover:bg-slate-700 rounded-lg transition">
                     <span className="text-sm text-gray-400 w-8">{player.number || idx + 1}</span>
                     <span className="font-medium">{player.name}</span>

@@ -6,8 +6,8 @@ import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
 import { Wallet, ArrowUpRight, ArrowDownLeft, Ticket, History, AlertCircle, Loader2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import VoucherRedeem from '@/app/wallet/VoucherRedeemer';
-import WithdrawModal from '@/app/wallet/WithdrawalModal';
+import VoucherRedeem from '@/app/uni/admin/components/wallet/VoucherRedeemer';
+import WithdrawModal from '@/app/uni/admin/components/wallet/WithdrawalModal';
 import toast from 'react-hot-toast';
 
 interface Transaction {
@@ -46,14 +46,16 @@ export default function WalletPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch balance
+      // Fetch balance - apiClient returns the data directly (interceptor handles it)
       const balanceResponse = await apiClient.get(API_ENDPOINTS.wallet.balance);
-      const balanceData = balanceResponse?.balance ?? balanceResponse?.data?.balance ?? 0;
+      // If apiClient returns the data directly, use it directly
+      // If it returns an AxiosResponse, use response.data
+      const balanceData = (balanceResponse as any)?.data?.balance ?? (balanceResponse as any)?.balance ?? 0;
       setBalance(typeof balanceData === 'number' ? balanceData : parseFloat(balanceData) || 0);
 
       // Fetch transactions
       const transactionsResponse = await apiClient.get(API_ENDPOINTS.wallet.transactions);
-      let transactionsData = transactionsResponse?.data ?? transactionsResponse ?? [];
+      let transactionsData = (transactionsResponse as any)?.data ?? transactionsResponse ?? [];
       if (!Array.isArray(transactionsData)) {
         transactionsData = transactionsData?.results ?? transactionsData?.transactions ?? [];
       }
