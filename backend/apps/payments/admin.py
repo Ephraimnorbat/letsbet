@@ -6,26 +6,16 @@ from apps.wallet.models import Wallet, Transaction as WalletTransaction
 
 @admin.register(WithdrawalRequest)
 class WithdrawalRequestAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'amount', 'withdrawal_method', 'status', 'created_at']
-    list_filter = ['status', 'withdrawal_method', 'created_at']
-    search_fields = ['user__username', 'user__email', 'address_details']
-    readonly_fields = ['created_at', 'updated_at']
-    actions = ['approve_withdrawals', 'reject_withdrawals']
+    list_display = ('id', 'user', 'amount_display', 'currency', 'withdrawal_method', 'status', 'created_at')
+    list_filter = ('status', 'withdrawal_method', 'currency')
+    search_fields = ('user__username', 'user__email', 'address_details')
+    readonly_fields = ('created_at', 'updated_at')
 
-    def save_model(self, request, obj, form, change):
-        """
-        Handles manual single-row updates inside the detail edit view.
-        """
-        if change and 'status' in form.changed_data:
-            # Fetch the unedited instance from DB to verify the original state
-            old_obj = WithdrawalRequest.objects.get(pk=obj.pk)
-            if old_obj.status == 'pending':
-                if obj.status == 'approved':
-                    self._process_approval(obj)
-                elif obj.status == 'rejected':
-                    self._process_rejection(obj)
-        
-        super().save_model(request, obj, form, change)
+    def amount_display(self, obj):
+        if obj.currency:
+            return f"{obj.currency.symbol}{obj.amount:.2f}"
+        return f"{obj.amount:.2f}"
+    amount_display.short_description = 'Amount'
 
     # --- Custom Admin Actions for Bulk Processing ---
     @admin.action(description="Approve selected pending withdrawals")

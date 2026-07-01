@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { liveMatchesService } from '@/lib/api/liveMatches';
+import { useLiveMatches } from '@/lib/api/hooks/useMatches';
 
 interface MatchData {
   id: number;
@@ -30,11 +30,11 @@ interface MatchData {
 }
 
 export default function LiveMatches() {
-  const { data: liveMatches = [], isLoading, error } = useQuery({
-    queryKey: ['liveMatches'],
-    queryFn: () => liveMatchesService.getLiveMatches(),
-    refetchInterval: 30000,
-  });
+  // ✅ Use the hook instead of the service
+  const { data: response, isLoading, error } = useLiveMatches('upcoming');
+  
+  // Extract the live matches from the response
+  const liveMatches = response?.data || response || [];
 
   if (isLoading) {
     return (

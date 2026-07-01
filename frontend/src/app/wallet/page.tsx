@@ -1,359 +1,237 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowUpRight,
-  ArrowDownLeft,
-  CheckCircle2,
-  Copy
-} from 'lucide-react';
-
 import { useAuthStore } from '@/store/authStore';
 import { apiClient } from '@/lib/api/client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
+import { Wallet, ArrowUpRight, ArrowDownLeft, Ticket, History, AlertCircle, Loader2 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import VoucherRedeem from '@/app/wallet/VoucherRedeemer';
+import WithdrawModal from '@/app/wallet/WithdrawalModal';
 import toast from 'react-hot-toast';
 
-interface PaymentInfo {
-  pay_address: string;
-  pay_amount: number;
-  pay_currency: string;
-  payment_id: string;
-  payment_status?: string;
+interface Transaction {
+  id: number;
+  amount: number;
+  transaction_type: 'credit' | 'debit';
+  description: string;
+  status: string;
+  created_at: string;
+  reference?: string;
 }
 
 export default function WalletPage() {
-  const authStore = useAuthStore();
-  const user = authStore?.user as any;
-
-  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
-  const [amount, setAmount] = useState('');
-  const [account, setAccount] = useState('');
-  const [method, setMethod] = useState('usdttrc20');
-
-  const [balance, setBalance] = useState({ balance: 0, bonus_balance: 0 });
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
-
-  const currencySymbol = user?.currency_symbol || 'KSh';
-  const currencyCode = user?.currency_code || 'KES';
-
-  // ================= FETCH WALLET =================
-  const fetchWallet = async () => {
-    try {
-      setLoading(true);
-
-      const [balanceRes, txRes] = await Promise.all([
-        apiClient.get(API_ENDPOINTS.wallet.balance),
-        apiClient.get(API_ENDPOINTS.wallet.transactions)
-      ]);
-
-      const bData = (balanceRes as any)?.data || balanceRes;
-      const tData = (txRes as any)?.data || txRes;
-
-      const latestBalance = bData?.balance ?? 0;
-      const latestBonus = bData?.bonus_balance ?? 0;
-
-      setBalance({
-        balance: latestBalance,
-        bonus_balance: latestBonus
-      });
-
-      // 🚀 THE SYNC FIX: Push the freshly retrieved balance into the global auth store state
-    if (authStore && (authStore as any).setUser && user) {
-      (authStore as any).setUser({
-        ...user,
-        balance: latestBalance
-      });
-    }
-      setTransactions(tData?.results ?? tData ?? []);
-    } catch (err) {
-      console.error('Wallet fetch error:', err);
-      toast.error('Failed to load wallet');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user } = useAuthStore();
+  const [balance, setBalance] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [currencySymbol, setCurrencySymbol] = useState<string>('KSh');
+  const [currencyCode, setCurrencyCode] = useState<string>('KES');
 
   useEffect(() => {
-    fetchWallet();
+    // Get user's currency from auth store
+    if (user?.preferred_currency) {
+      setCurrencySymbol(user.preferred_currency.symbol || 'KSh');
+      setCurrencyCode(user.preferred_currency.code || 'KES');
+    } else if (user?.currency_symbol) {
+      setCurrencySymbol(user.currency_symbol);
+    }
+    fetchWalletData();
   }, []);
 
-  // ================= DEPOSIT =================
-  const handleDeposit = async () => {
-    if (!amount || Number(amount) <= 0) return toast.error('Enter valid amount');
-
+  const fetchWalletData = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
+      // Fetch balance
+      const balanceResponse = await apiClient.get(API_ENDPOINTS.wallet.balance);
+      const balanceData = balanceResponse?.balance ?? balanceResponse?.data?.balance ?? 0;
+      setBalance(typeof balanceData === 'number' ? balanceData : parseFloat(balanceData) || 0);
 
-      const res = await apiClient.post(API_ENDPOINTS.wallet.deposit, {
-        amount: Number(amount),
-        pay_currency: method
-      });
-
-      const pData = (res as any)?.data || res;
-      setPaymentInfo(pData);
+      // Fetch transactions
+      const transactionsResponse = await apiClient.get(API_ENDPOINTS.wallet.transactions);
+      let transactionsData = transactionsResponse?.data ?? transactionsResponse ?? [];
+      if (!Array.isArray(transactionsData)) {
+        transactionsData = transactionsData?.results ?? transactionsData?.transactions ?? [];
+      }
+      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       
-      toast.success('Deposit address generated');
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || 'Deposit failed');
+    } catch (error: any) {
+      console.error('Failed to fetch wallet data:', error);
+      const errorMsg = error?.response?.data?.message || 'Failed to load wallet data';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  // ================= WITHDRAW =================
-  const handleWithdraw = async () => {
-    if (!amount || !account) return toast.error('Fill all fields');
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
-    try {
-      setLoading(true);
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Failed to load wallet
+        </h3>
+        <p className="text-gray-500 dark:text-gray-400">{error}</p>
+        <button
+          onClick={fetchWalletData}
+          className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
-      await apiClient.post(API_ENDPOINTS.wallet.withdraw, {
-        amount: Number(amount),
-        method: 'manual',
-        details: account
-      });
-
-      toast.success('Withdrawal request submitted');
-
-      setAmount('');
-      setAccount('');
-      fetchWallet();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || 'Withdrawal failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard');
-  };
+  const safeBalance = typeof balance === 'number' && !isNaN(balance) ? balance : 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 pt-24 px-4 text-white">
+    <div className="min-h-screen bg-gray-900 py-8 px-4 pt-24">
       <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6 text-white">Wallet</h1>
 
-        {/* BALANCE */}
-        <div className="grid md:grid-cols-2 gap-4 mb-8">
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 shadow-lg">
-            <p className="text-sm text-blue-100 font-medium">Balance</p>
-            <h1 className="text-3xl font-black tracking-tight mt-1">
-              {currencySymbol} {Number(balance.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h1>
-          </div>
+        {/* Balance Card */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 mb-6">
+          <p className="text-sm text-gray-400">Available Balance</p>
+          <p className="text-3xl font-bold text-white mt-1">
+            {currencySymbol} {safeBalance.toFixed(2)}
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            {currencyCode} account
+          </p>
+        </div>
 
-          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-md">
-            <p className="text-sm text-slate-400 font-medium">Bonus Balance</p>
-            <h1 className="text-3xl font-black tracking-tight text-purple-400 mt-1">
-              {currencySymbol} {Number(balance.bonus_balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h1>
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <button
+            onClick={() => setShowVoucherModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl flex items-center justify-center gap-2 transition"
+          >
+            <Ticket className="w-5 h-5" />
+            Deposit with Voucher
+          </button>
+          <button
+            onClick={() => setShowWithdrawModal(true)}
+            className="bg-red-600 hover:bg-red-700 text-white p-4 rounded-xl flex items-center justify-center gap-2 transition"
+          >
+            <ArrowDownLeft className="w-5 h-5" />
+            Withdraw
+          </button>
+        </div>
+
+        {/* How to Get Voucher Info */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <Ticket className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-medium text-white">How to get a voucher</h4>
+              <ol className="text-xs text-gray-400 mt-1 space-y-1 list-decimal list-inside">
+                <li>Contact our verified vendor on <strong className="text-white">Telegram</strong> or <strong className="text-white">WhatsApp</strong></li>
+                <li>Send payment via M-Pesa, Crypto, or Bank Transfer</li>
+                <li>Receive your 16-digit voucher code</li>
+                <li>Redeem it here instantly!</li>
+              </ol>
+            </div>
           </div>
         </div>
 
-        {/* TABS */}
-        <div className="flex bg-slate-900 p-1 rounded-xl mb-6 border border-slate-800">
-          {['deposit', 'withdraw', 'history'].map((t: any) => (
-            <button
-              key={t}
-              onClick={() => {
-                setActiveTab(t);
-                setPaymentInfo(null);
-              }}
-              className={`flex-1 py-2.5 text-sm font-bold capitalize rounded-lg transition-all ${
-                activeTab === t 
-                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/50' 
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        {/* Transactions */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold flex items-center gap-2 text-white">
+              <History className="w-4 h-4" />
+              Transaction History
+            </h2>
+            <span className="text-xs text-gray-500">{transactions.length} transactions</span>
+          </div>
 
-        {/* CONTENT */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
-          <AnimatePresence mode="wait">
-
-            {/* DEPOSIT */}
-            {activeTab === 'deposit' && (
-              <motion.div 
-                key="deposit"
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="space-y-4"
-              >
-                {!paymentInfo ? (
-                  <>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">
-                        Amount ({currencyCode})
-                      </label>
-                      <input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl font-mono focus:border-blue-500 focus:outline-none transition"
-                        placeholder="0.00"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">
-                        Payment System
-                      </label>
-                      <select
-                        value={method}
-                        onChange={(e) => setMethod(e.target.value)}
-                        className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-blue-500 focus:outline-none transition"
-                      >
-                        <option value="usdttrc20">USDT (TRC20)</option>
-                        <option value="btc">Bitcoin (BTC)</option>
-                        <option value="eth">Ethereum (ETH)</option>
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={handleDeposit}
-                      disabled={loading}
-                      className="w-full bg-blue-600 py-4 rounded-xl font-bold transition hover:bg-blue-500 disabled:opacity-50 text-sm tracking-wide uppercase mt-2"
-                    >
-                      {loading ? 'Processing...' : 'Generate Address'}
-                    </button>
-                  </>
-                ) : (
-                  <div className="text-center space-y-4 py-4">
-                    <CheckCircle2 className="mx-auto text-green-500 w-12 h-12" />
-                    <div>
-                      <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Send exactly</p>
-                      <p className="text-2xl font-mono font-black text-green-400 mt-1">
-                        {paymentInfo.pay_amount} {paymentInfo.pay_currency.toUpperCase()}
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group flex items-center justify-between">
-                      <span className="font-mono text-xs text-left text-slate-300 select-all break-all pr-4">
-                        {paymentInfo.pay_address}
-                      </span>
-                      <button
-                        onClick={() => copy(paymentInfo.pay_address)}
-                        className="flex items-center gap-1 shrink-0 bg-slate-900 hover:bg-slate-800 text-blue-400 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-bold transition"
-                      >
-                        <Copy size={14} />
-                        Copy
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setPaymentInfo(null);
-                        setAmount('');
-                      }}
-                      className="text-blue-400 text-xs font-semibold hover:underline block mx-auto pt-2"
-                    >
-                      Cancel and Create New Deposit
-                    </button>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* WITHDRAW */}
-            {activeTab === 'withdraw' && (
-              <motion.div 
-                key="withdraw"
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">
-                    Withdrawal Amount ({currencyCode})
-                  </label>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl font-mono focus:border-red-500 focus:outline-none transition"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">
-                    Destination Address / Payment Details
-                  </label>
-                  <input
-                    value={account}
-                    onChange={(e) => setAccount(e.target.value)}
-                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl focus:border-red-500 focus:outline-none transition"
-                    placeholder="Provide network target address..."
-                  />
-                </div>
-
-                <button
-                  onClick={handleWithdraw}
-                  disabled={loading}
-                  className="w-full bg-red-600 py-4 rounded-xl font-bold transition hover:bg-red-500 disabled:opacity-50 text-sm tracking-wide uppercase mt-2"
+          {transactions.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No transactions yet</p>
+              <p className="text-xs text-gray-500 mt-1">Your transaction history will appear here</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {transactions.slice(0, 20).map((tx) => (
+                <div
+                  key={tx.id}
+                  className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition"
                 >
-                  {loading ? 'Processing...' : 'Withdraw Funds'}
-                </button>
-              </motion.div>
-            )}
-
-            {/* HISTORY */}
-            {activeTab === 'history' && (
-              <motion.div 
-                key="history"
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="space-y-3"
-              >
-                {transactions.length === 0 ? (
-                  <p className="text-center text-slate-500 py-12 text-sm">
-                    No transactions recorded on this account.
-                  </p>
-                ) : (
-                  transactions.map((tx) => {
-                    const isCredit = tx.transaction_type === 'credit' || tx.type === 'deposit';
-                    return (
-                      <div
-                        key={tx.id}
-                        className="flex justify-between p-4 bg-slate-950 rounded-xl items-center border border-slate-900 hover:border-slate-800 transition"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${isCredit ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                            {isCredit ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-white">{tx.description || 'Wallet Transaction'}</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {new Date(tx.created_at || tx.timestamp).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-
-                        <p className={`font-mono font-bold text-sm ${isCredit ? 'text-green-400' : 'text-red-400'}`}>
-                          {isCredit ? '+' : '-'} {currencySymbol} {Number(tx.amount).toFixed(2)}
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </motion.div>
-            )}
-
-          </AnimatePresence>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-white truncate">
+                      {tx.description || 'Transaction'}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {tx.created_at ? new Date(tx.created_at).toLocaleString() : 'N/A'}
+                    </p>
+                    {tx.reference && (
+                      <p className="text-[10px] text-gray-500 font-mono">Ref: {tx.reference}</p>
+                    )}
+                  </div>
+                  <div className="text-right ml-4 flex-shrink-0">
+                    <span
+                      className={`font-semibold text-sm ${
+                        tx.transaction_type === 'credit'
+                          ? 'text-green-400'
+                          : tx.transaction_type === 'debit'
+                          ? 'text-red-400'
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      {tx.transaction_type === 'credit' ? '+' : 
+                       tx.transaction_type === 'debit' ? '-' : ''}
+                      {currencySymbol} {typeof tx.amount === 'number' ? tx.amount.toFixed(2) : '0.00'}
+                    </span>
+                    <p className="text-[10px] uppercase text-gray-500">
+                      {tx.status || 'completed'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Voucher Modal */}
+        {showVoucherModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <VoucherRedeem
+              onSuccess={() => {
+                fetchWalletData();
+                setShowVoucherModal(false);
+              }}
+              onClose={() => setShowVoucherModal(false)}
+            />
+          </div>
+        )}
+
+        {/* Withdraw Modal */}
+        {showWithdrawModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <WithdrawModal
+              balance={safeBalance}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+              onSuccess={() => {
+                fetchWalletData();
+                setShowWithdrawModal(false);
+              }}
+              onClose={() => setShowWithdrawModal(false)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

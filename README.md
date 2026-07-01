@@ -59,3 +59,6 @@ sudo systemctl restart letsbet-daphne.service
 sudo systemctl restart letsbet-celery.service
 sudo systemctl restart letsbet-celerybeat.service
 sudo systemctl restart letsbet-next.service
+
+#git
+git reset --hard origin/main git clean -fd git pull origin main

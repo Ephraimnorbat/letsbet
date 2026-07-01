@@ -1,36 +1,5 @@
-import axios from 'axios';
 import { apiClient } from './client';
 import { API_ENDPOINTS } from './endpoints';
-import { LeagueOddsResponse } from '@/types/matches';
-
-
-/**
- * Fetches live betting odds for a specific league from our 
- * production-ready Django view (with Redis caching).
- */
-export const fetchLeagueOdds = async (leagueId: number): Promise<LeagueOddsResponse> => {
-  try {
-    // We use the functional endpoint from our constants
-    const response = await apiClient.get(API_ENDPOINTS.matches.externalOdds(leagueId));
-    
-    // Note: Since your apiClient response interceptor returns response.data,
-    // we return the result directly.
-    return response as unknown as LeagueOddsResponse;
-  } catch (error) {
-    // Errors are already toasted by your interceptor, but we throw for local handling
-    console.error(`Error fetching odds for league ${leagueId}:`, error);
-    throw error;
-  }
-};
-
-/**
- * Fetches all available leagues/sports to populate sidebars or selectors
- */
-export const fetchAvailableLeagues = async () => {
-  const response = await apiClient.get(API_ENDPOINTS.matches.leagues);
-  return response;
-};
-
 
 export class LiveMatchesService {
   private static instance: LiveMatchesService;
@@ -42,19 +11,12 @@ export class LiveMatchesService {
     return LiveMatchesService.instance;
   }
 
-  // ✅ Fetch from YOUR DJANGO backend (not RapidAPI directly)
-  async getLiveMatches() {
+  // ✅ Production-ready: Uses the same endpoint as your hooks
+  async getLiveMatches(sportKey: string = 'upcoming') {
     try {
-      const response = await fetch('/api/matches/external/live/');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch live matches');
-      }
-
-      const data = await response.json();
-
-      // Backend already returns clean array
-      return data || [];
+      const response = await apiClient.get(API_ENDPOINTS.matches.scores(sportKey));
+      // apiClient already returns data via interceptor, but handle both cases
+      return response?.data || response || [];
     } catch (error) {
       console.error('Error fetching live matches:', error);
       return [];
@@ -63,13 +25,8 @@ export class LiveMatchesService {
 
   async getMatchDetails(matchId: string) {
     try {
-      const response = await fetch(`/api/matches/${matchId}/`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch match details');
-      }
-
-      return await response.json();
+      const response = await apiClient.get(API_ENDPOINTS.matches.details(matchId));
+      return response;
     } catch (error) {
       console.error('Error fetching match details:', error);
       return null;
@@ -78,13 +35,9 @@ export class LiveMatchesService {
 
   async getTeamDetails(teamId: string) {
     try {
-      const response = await fetch(`/api/teams/${teamId}/`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch team details');
-      }
-
-      return await response.json();
+      const response = await apiClient.get(API_ENDPOINTS.matches.teams);
+      const teams = response || [];
+      return teams.find((team: any) => team.id === parseInt(teamId)) || null;
     } catch (error) {
       console.error('Error fetching team details:', error);
       return null;

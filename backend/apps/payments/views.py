@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 
+from rest_framework import status
 from decimal import Decimal, InvalidOperation
 from django.db import transaction as db_transaction
 from django.utils import timezone
@@ -15,7 +16,7 @@ from asgiref.sync import async_to_sync
 import requests
 from rest_framework.permissions import IsAdminUser
 from django.shortcuts import get_object_or_404
-
+from apps.accounts.models import Currency
 # App Imports
 from apps.wallet.models import Wallet, Transaction, Currency  # Added Currency mapping relation here
 from .models import PaymentTransaction, WithdrawalRequest
@@ -66,58 +67,168 @@ class CreateDepositView(APIView):
 
 
 class RequestWithdrawalView(APIView):
-    """Entry point for Manual Withdrawals"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
+
         amount_raw = request.data.get("amount")
-        method = request.data.get("method") # e.g. M-Pesa, Bank, USDT
+        method = request.data.get("method")
         details = request.data.get("details")
 
+        # ----------------------------
+        # Validate amount
+        # ----------------------------
         try:
             amount = Decimal(str(amount_raw))
         except (ValueError, TypeError, InvalidOperation):
-            return Response({"error": "Invalid amount format"}, status=400)
+            return Response(
+                {"error": "Invalid amount format"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if amount <= 0:
-            return Response({"error": "Amount must be greater than zero"}, status=400)
-
-        with db_transaction.atomic():
-            wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
-            
-            if wallet.balance < amount:
-                return Response({"error": "Insufficient balance"}, status=400)
-
-            # Deduct standard system units from central base wallet 
-            wallet.balance -= amount
-            wallet.total_withdrawn += amount
-            wallet.save()
-
-            withdrawal = WithdrawalRequest.objects.create(
-                user=user,
-                amount=amount,
-                withdrawal_method=method,
-                address_details=details,
-                status='pending'
+            return Response(
+                {"error": "Amount must be greater than zero"},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-            Transaction.objects.create(
-                user=user,
-                amount=amount,
-                transaction_currency_code=wallet.currency.code, # Tracks dynamic token target parameters
-                transaction_type='debit',
-                status='pending',
-                category='withdrawal',
-                description=f'Withdrawal request to {method}',
-                reference=f"WTH-{withdrawal.id}",
-                payment_method=method,
-                payment_details={'details': details}
+        if not method:
+            return Response(
+                {"error": "Withdrawal method is required."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        return Response({"message": "Withdrawal request submitted for approval."})
+        if not details:
+            return Response(
+                {"error": "Withdrawal details are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # ----------------------------
+        # User currency
+        # ----------------------------
+        user_currency = user.preferred_currency
 
+        if not user_currency:
+            return Response(
+                {"error": "User has no preferred currency configured."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ----------------------------
+        # Minimum withdrawal
+        # ----------------------------
+        if amount < Decimal("10"):
+            return Response(
+                {
+                    "error": f"Minimum withdrawal is {user_currency.symbol}10.00"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+
+            with db_transaction.atomic():
+
+                wallet, _ = Wallet.objects.select_for_update().get_or_create(
+                    user=user
+                )
+
+                if wallet.balance < amount:
+                    return Response(
+                        {"error": "Insufficient balance"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # -------------------------------------------------
+                # Prevent duplicate pending withdrawals
+                # -------------------------------------------------
+                existing = WithdrawalRequest.objects.filter(
+                    user=user,
+                    status="pending"
+                ).first()
+
+                if existing:
+                    return Response(
+                        {
+                            "error": "You already have a pending withdrawal awaiting approval."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # -------------------------------------------------
+                # Deduct wallet
+                # -------------------------------------------------
+                wallet.balance -= amount
+                wallet.total_withdrawn += amount
+                wallet.save()
+
+                # -------------------------------------------------
+                # Create withdrawal request
+                # -------------------------------------------------
+                withdrawal = WithdrawalRequest.objects.create(
+                    user=user,
+                    amount=amount,
+                    currency=user_currency,
+                    withdrawal_method=method,
+                    address_details=details,
+                    status="pending",
+                )
+
+                reference = f"WTH-{withdrawal.id}"
+
+                # -------------------------------------------------
+                # Create transaction only once
+                # -------------------------------------------------
+                transaction, created = Transaction.objects.get_or_create(
+                    reference=reference,
+                    defaults={
+                        "user": user,
+                        "amount": amount,
+                        "transaction_currency_code": user_currency.code,
+                        "transaction_type": "debit",
+                        "status": "pending",
+                        "category": "withdrawal",
+                        "description": f"Withdrawal request to {method}",
+                        "payment_method": method,
+                        "payment_details": {
+                            "details": details,
+                            "currency_code": user_currency.code,
+                            "currency_symbol": user_currency.symbol,
+                        },
+                    },
+                )
+
+                # This should never happen unless something is seriously wrong
+                if not created:
+                    raise Exception(
+                        f"Transaction reference {reference} already exists."
+                    )
+
+            return Response(
+                {
+                    "message": "Withdrawal request submitted successfully.",
+                    "withdrawal_id": withdrawal.id,
+                    "transaction_reference": reference,
+                    "amount": float(amount),
+                    "currency": user_currency.code,
+                    "symbol": user_currency.symbol,
+                    "status": withdrawal.status,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+            return Response(
+                {
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 class NowPaymentsWebhookView(APIView):
     permission_classes = []  # Publicly accessible
 
@@ -254,33 +365,28 @@ class AdminDepositsListView(APIView):
             
         return Response(data)
 
-
 class AdminWithdrawalsListView(APIView):
-    """
-    Administrative Queue: Returns all global manual payout requests
-    """
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        withdrawals = WithdrawalRequest.objects.select_related('user').all().order_by('-created_at')
-        
+        # No filtering whatsoever – just return all withdrawals.
+        qs = WithdrawalRequest.objects.select_related('user', 'currency').all().order_by('-created_at')
         data = []
-        for wth in withdrawals:
+        for wth in qs:
+            currency_symbol = wth.currency.symbol if wth.currency else 'KSh'
+            currency_code = wth.currency.code if wth.currency else 'KES'
             data.append({
                 "id": wth.id,
                 "amount": float(wth.amount),
-                "currency": wth.currency,
+                "currency": currency_code,
+                "currency_symbol": currency_symbol,
                 "withdrawal_method": wth.withdrawal_method,
                 "address_details": wth.address_details,
                 "status": wth.status,
                 "admin_notes": wth.admin_notes,
                 "created_at": wth.created_at.isoformat(),
-                
-                # 🔥 Shotgun approach: Add every key variation the UI might be evaluating
                 "username": wth.user.username,
                 "email": wth.user.email,
-                "user_name": wth.user.username,
-                "user_id": wth.user.id,
                 "user": {
                     "id": wth.user.id,
                     "username": wth.user.username,
@@ -292,55 +398,69 @@ class AdminWithdrawalsListView(APIView):
                     "email": wth.user.email,
                 }
             })
-            
         return Response(data)
-    
-
-
-
 class ProcessWithdrawalView(APIView):
-    """
-    Administrative Execution: Approve or Reject a manual settlement queue request
-    """
     permission_classes = [IsAdminUser]
 
     def post(self, request, pk):
-        action = request.data.get("action")  # 'approve' or 'reject'
+        action = request.data.get("action")
         admin_notes = request.data.get("admin_notes", "")
 
         if action not in ['approve', 'reject']:
-            return Response({"error": "Valid action ('approve' or 'reject') required"}, status=400)
+            return Response(
+                {"error": "Valid action ('approve' or 'reject') required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        with db_transaction.atomic():
-            # Secure the withdrawal request instance
-            withdrawal = get_object_or_404(WithdrawalRequest.objects.select_for_update(), pk=pk)
+        try:
+            with db_transaction.atomic():
+                # ✅ Get the withdrawal without any filtering on currency
+                withdrawal = WithdrawalRequest.objects.select_for_update().get(pk=pk)
 
-            if withdrawal.status != 'pending':
-                return Response({"error": "This transaction has already been processed"}, status=400)
+                if withdrawal.status != 'pending':
+                    return Response(
+                        {"error": "This transaction has already been processed"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-            if action == 'approve':
-                withdrawal.status = 'approved'
-                withdrawal.admin_notes = admin_notes
-                withdrawal.save()
+                if action == 'approve':
+                    withdrawal.status = 'approved'
+                    withdrawal.admin_notes = admin_notes
+                    withdrawal.save()
 
-                # Update corresponding ledger Transaction status to completed
-                Transaction.objects.filter(reference=f"WTH-{withdrawal.id}").update(status='completed')
+                    # ✅ Update Transaction by reference only
+                    Transaction.objects.filter(reference=f"WTH-{withdrawal.id}").update(status='completed')
 
-            elif action == 'reject':
-                withdrawal.status = 'rejected'
-                withdrawal.admin_notes = admin_notes
-                withdrawal.save()
+                elif action == 'reject':
+                    withdrawal.status = 'rejected'
+                    withdrawal.admin_notes = admin_notes
+                    withdrawal.save()
 
-                # Reverse funds back to user's wallet profile
-                wallet, _ = Wallet.objects.select_for_update().get_or_create(user=withdrawal.user)
-                wallet.balance += withdrawal.amount
-                wallet.total_withdrawn -= withdrawal.amount
-                wallet.save()
+                    wallet, _ = Wallet.objects.select_for_update().get_or_create(user=withdrawal.user)
+                    wallet.balance += withdrawal.amount
+                    wallet.total_withdrawn -= withdrawal.amount
+                    wallet.save()
 
-                # Mark corresponding Transaction ledger line as failed/cancelled
-                Transaction.objects.filter(reference=f"WTH-{withdrawal.id}").update(
-                    status='failed', 
-                    description=f"Rejected: {admin_notes}"
-                )
+                    Transaction.objects.filter(reference=f"WTH-{withdrawal.id}").update(
+                        status='failed',
+                        description=f"Rejected: {admin_notes}"
+                    )
 
-        return Response({"message": f"Withdrawal request successfully marked as {withdrawal.status}."})
+            return Response(
+                {"message": f"Withdrawal request successfully marked as {withdrawal.status}."},
+                status=status.HTTP_200_OK
+            )
+
+        except WithdrawalRequest.DoesNotExist:
+            return Response(
+                {"error": "Withdrawal request not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"Error processing withdrawal: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )

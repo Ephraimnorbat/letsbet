@@ -9,6 +9,7 @@ interface WithdrawalRequest {
   id: number;
   amount: string;
   currency: string;
+  currency_symbol: string;
   withdrawal_method: string;
   address_details: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -103,7 +104,7 @@ export default function AdminWithdrawals() {
                   <ArrowDownLeft size={14} className="text-red-400" /> {req.user?.username || 'System User'}
                 </td>
                 <td className="p-4 text-sm font-black text-red-400">
-                  ${parseFloat(req.amount).toFixed(2)} <span className="text-[10px] font-mono text-slate-500 uppercase">{req.currency}</span>
+                  {req.currency_symbol || 'KSh'}{parseFloat(req.amount).toFixed(2)} <span className="text-[10px] font-mono text-slate-500 uppercase">{req.currency}</span>
                 </td>
                 <td className="p-4">
                   <span className="bg-slate-900 border border-slate-800 text-slate-300 px-2 py-1 rounded text-xs font-sans font-medium flex items-center gap-1.5 w-max">

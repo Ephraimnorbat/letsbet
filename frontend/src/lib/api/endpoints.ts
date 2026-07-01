@@ -26,25 +26,25 @@ export const API_ENDPOINTS = {
     convert: '/auth/currencies/convert/',
   },
   
-  // Match endpoints - UPDATED with all properties
   matches: {
-    adminFixtures: '/matches/admin-fixtures/',
-    externalOdds: (leagueId: string | number) => `/matches/external/odds/${leagueId}/`,
-    live: '/matches/scores/upcoming/',
+    live: '/matches/live/',
     upcoming: '/matches/upcoming/',
     completed: '/matches/completed/',
-    
+    all: '/matches/all/',  // ✅ Get ALL matches from database
+    results: (sportKey: string) => `/matches/results/${sportKey}/`,
     details: (id: string | number) => `/matches/${id}/`,
-    stats: (id: string) => `/matches/${id}/stats/`,
+    stats: (id: string | number) => `/matches/${id}/stats/`,
     odds: (sportKey: string) => `/matches/odds/${sportKey}/`,
     scores: (sportKey: string) => `/matches/scores/${sportKey}/`,
+    upcomingOdds: '/matches/upcoming/odds/',
     headToHead: (team1Id: string | number, team2Id: string | number) => 
       `/matches/h2h/${team1Id}/${team2Id}/`,
     events: (id: string | number) => `/matches/${id}/events/`,
-    lineup: (id: string) => `/matches/${id}/lineup/`,
+    lineup: (id: string | number) => `/matches/${id}/lineup/`,
     sports: '/matches/sports/',
     leagues: '/matches/leagues/',
     teams: '/matches/teams/',
+    adminFixtures: '/matches/admin-fixtures/',
   },
   
   // Betting endpoints
@@ -61,14 +61,17 @@ export const API_ENDPOINTS = {
     loadSharedSlip: (code: string) => `/betting/betslip/load/${code}/`,
   },
   
-  // Wallet endpoints
   wallet: {
     balance: '/wallet/balance/',
     deposit: '/payments/deposit/',
-    withdraw: '/payments/withdraw/',
+    withdraw: '/payments/withdraw/',  // This will use your existing withdrawal endpoint
     transactions: '/wallet/transactions/',
+    // Voucher endpoints
+    redeemVoucher: '/wallet/vouchers/redeem/',
+    createVoucher: '/wallet/vouchers/create_voucher/',
+    voucherTypes: '/wallet/voucher-types/',
+    voucherAudit: '/wallet/vouchers/audit_logs/',
   },
-  
   // Leaderboard endpoints
   leaderboard: {
     list: '/leaderboard/',

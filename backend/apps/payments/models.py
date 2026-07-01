@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 import uuid
+from apps.accounts.models import Currency
 
 User = settings.AUTH_USER_MODEL
 
@@ -73,6 +74,8 @@ class TransactionLedger(models.Model):
 
 
 
+
+    
 class WithdrawalRequest(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -82,17 +85,39 @@ class WithdrawalRequest(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='withdrawals')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    currency = models.CharField(max_length=10, default='usd')
-    
-    # Details where the admin should send the money
-    withdrawal_method = models.CharField(max_length=50) # e.g., 'M-Pesa', 'USDT-TRC20'
-    address_details = models.TextField() # Phone number or Wallet address
-    
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
-    admin_notes = models.TextField(blank=True, null=True)
-    
+    currency = models.ForeignKey('accounts.Currency', on_delete=models.CASCADE, null=True, blank=True)
+    withdrawal_method = models.CharField(max_length=50)
+    address_details = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    admin_notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return f"{self.user.username} - {self.amount} ({self.status})"
+    def save(self, *args, **kwargs):
+        # ✅ Only set currency if not already set AND if it's not a string
+        if not self.currency and self.user:
+            try:
+                # Get the user's preferred currency
+                if hasattr(self.user, 'preferred_currency') and self.user.preferred_currency:
+                    # If it's already a Currency object, use it directly
+                    if isinstance(self.user.preferred_currency, Currency):
+                        self.currency = self.user.preferred_currency
+                    else:
+                        # If it's a string (like 'usd'), look up the Currency object
+                        from apps.accounts.models import Currency
+                        try:
+                            self.currency = Currency.objects.get(code__iexact=str(self.user.preferred_currency))
+                        except Currency.DoesNotExist:
+                            # Fallback to KES
+                            self.currency = Currency.objects.get(code='KES')
+                else:
+                    # Fallback to KES
+                    from apps.accounts.models import Currency
+                    self.currency = Currency.objects.get(code='KES')
+            except Exception as e:
+                print(f"Error setting currency for withdrawal {self.id}: {e}")
+                # Last resort: try to get any currency
+                from apps.accounts.models import Currency
+                self.currency = Currency.objects.first()
+        
+        super().save(*args, **kwargs)

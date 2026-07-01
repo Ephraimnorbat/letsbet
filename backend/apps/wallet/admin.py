@@ -4,17 +4,27 @@ from .models import Wallet, Transaction
 
 @admin.register(Wallet)
 class WalletAdmin(admin.ModelAdmin):
-    list_display = ('user', 'display_balance', 'bonus_balance', 'total_deposited', 'total_withdrawn', 'total_won')
-    search_fields = ('user__email', 'user__username')
+    list_display = ('user', 'balance_display', 'currency', 'total_deposited_display', 'total_withdrawn_display')
+    search_fields = ('user__username', 'user__email')
     readonly_fields = ('created_at', 'updated_at')
-    
-    def display_balance(self, obj):
-        # Force format it to a plain string first
-        balance_str = f"{float(obj.balance):.2f}"
-        return format_html(
-            '<span style="color: green; font-weight: bold;">${}</span>', 
-            balance_str
-        )
+
+    def balance_display(self, obj):
+        if obj.currency:
+            return f"{obj.currency.symbol}{obj.balance:.2f}"
+        return f"{obj.balance:.2f}"
+    balance_display.short_description = 'Balance'
+
+    def total_deposited_display(self, obj):
+        if obj.currency:
+            return f"{obj.currency.symbol}{obj.total_deposited:.2f}"
+        return f"{obj.total_deposited:.2f}"
+    total_deposited_display.short_description = 'Total Deposited'
+
+    def total_withdrawn_display(self, obj):
+        if obj.currency:
+            return f"{obj.currency.symbol}{obj.total_withdrawn:.2f}"
+        return f"{obj.total_withdrawn:.2f}"
+    total_withdrawn_display.short_description = 'Total Withdrawn'
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):

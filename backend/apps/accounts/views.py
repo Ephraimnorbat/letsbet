@@ -19,6 +19,7 @@ from django.core.mail import send_mail
 from django.contrib.auth.hashers import check_password
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from rest_framework.permissions import IsAdminUser
 
 
 from django.conf import settings
@@ -257,6 +258,15 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+    
+class AdminUserListView(generics.ListAPIView):
+    permission_classes = [IsAdminUser]
+    serializer_class = UserDetailSerializer
+
+    queryset = User.objects.select_related(
+        "country",
+        "preferred_currency",
+    ).all().order_by("-date_joined")
 
 class UpdateProfileView(APIView):
     permission_classes = [IsAuthenticated]

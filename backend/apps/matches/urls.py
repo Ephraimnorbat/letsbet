@@ -14,7 +14,10 @@ from .views import (
     LineupView,
     AdminMatchesListView,
     upcoming_matches,
-    MatchResultsAPIView
+    MatchResultsAPIView,
+    MatchesCRUDView,
+    upcoming_odds,
+    AllMatchesView
 )
 
 # 1. Initialize the router
@@ -29,9 +32,14 @@ router.register(r'local-matches', MatchViewSet, basename='local-match')
 urlpatterns = [
     # This includes the auto-generated CRUD routes for your dropdowns
     path('', include(router.urls)),
+    path('all/', AllMatchesView.as_view(), name='all-matches'),
+    path('matches-crud/', MatchesCRUDView.as_view(), name='matches-crud'),
+    path('matches-crud/<int:pk>/', MatchesCRUDView.as_view(), name='matches-crud-detail'),
+    
 
     # ✅ MAIN ENDPOINT (USE THIS IN FRONTEND)
     path('upcoming/', upcoming_matches),
+    path('upcoming/odds/', upcoming_odds, name='upcoming-odds'),
     path('admin-fixtures/', AdminMatchesListView.as_view(), name='admin-matches-list'),
 
     # Live scores

@@ -19,7 +19,7 @@ urlpatterns = [
     path('password-reset/request/', views.PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset/confirm/', views.PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     
-    
+    path("profiles/admin-list/", views.AdminUserListView.as_view(), name="admin-users",),
     # New preferences endpoints
     path('preferences/', views.GetUserPreferencesView.as_view(), name='user-preferences'),
     path('preferences/update/', views.UpdateUserCountryCurrencyView.as_view(), name='update-preferences'),

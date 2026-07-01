@@ -54,6 +54,126 @@ class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
     permission_classes = [IsAuthenticated]
 
+class MatchesCRUDView(generics.ListCreateAPIView):
+    """
+    View for admin to create and list matches
+    """
+    queryset = Match.objects.all().order_by('-match_date')
+    serializer_class = MatchSerializer
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, *args, **kwargs):
+        if 'pk' in kwargs:
+            # Get single match
+            try:
+                match = Match.objects.get(pk=kwargs['pk'])
+                serializer = self.get_serializer(match)
+                return Response(serializer.data)
+            except Match.DoesNotExist:
+                return Response(
+                    {"error": "Match not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        return super().get(request, *args, **kwargs)
+
+    def put(self, request, *args, **kwargs):
+        # Update match
+        try:
+            match = Match.objects.get(pk=kwargs['pk'])
+            serializer = self.get_serializer(match, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Match.DoesNotExist:
+            return Response(
+                {"error": "Match not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def delete(self, request, *args, **kwargs):
+        # Delete match
+        try:
+            match = Match.objects.get(pk=kwargs['pk'])
+            match.delete()
+            return Response(
+                {"message": "Match deleted successfully"},
+                status=status.HTTP_200_OK
+            )
+        except Match.DoesNotExist:
+            return Response(
+                {"error": "Match not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+@api_view(['GET'])
+def upcoming_odds(request):
+    """
+    Get odds for upcoming matches across all valid sports
+    """
+    cache_key = "upcoming_odds_all"
+    cached_data = cache.get(cache_key)
+    
+    if cached_data:
+        return Response({
+            "status": "success",
+            "data": cached_data,
+            "source": "cache"
+        })
+    
+    odds_data = []
+    
+    # ✅ Fetch all active sports from the API
+    all_sports = sports_api.get_all_active_sports()
+    
+    if all_sports:
+        # ✅ Filter only sports that have 'odds' support
+        # The Odds API returns sports with a 'has_odds' field or we check if they're in our list
+        valid_sports = []
+        for sport in all_sports:
+            sport_key = sport.get('key')
+            # Check if sport supports odds (the API should return has_odds: true)
+            if sport.get('has_odds', False) or sport_key in sports_api.get_valid_odds_sports():
+                valid_sports.append(sport_key)
+        
+        logger.info(f"Found {len(valid_sports)} sports with odds support")
+        
+        # ✅ Limit to first 5 sports to avoid rate limits
+        for sport_key in valid_sports[:5]:
+            try:
+                logger.info(f"Fetching odds for: {sport_key}")
+                odds = sports_api.get_odds(sport_key)
+                if odds and len(odds) > 0:
+                    for match in odds:
+                        match['sport_key'] = sport_key
+                    odds_data.extend(odds)
+                    logger.info(f"Fetched {len(odds)} matches for {sport_key}")
+                else:
+                    logger.info(f"No odds returned for {sport_key}")
+            except Exception as e:
+                logger.error(f"Error fetching odds for {sport_key}: {e}")
+    else:
+        # ✅ Fallback: use the hardcoded list if API fails
+        logger.warning("Could not fetch sports list, using fallback")
+        fallback_sports = ['soccer_epl', 'basketball_nba', 'americanfootball_nfl']
+        for sport_key in fallback_sports:
+            try:
+                odds = sports_api.get_odds(sport_key)
+                if odds:
+                    for match in odds:
+                        match['sport_key'] = sport_key
+                    odds_data.extend(odds)
+            except Exception as e:
+                logger.error(f"Error fetching fallback odds for {sport_key}: {e}")
+    
+    # Cache for 5 minutes
+    cache.set(cache_key, odds_data, timeout=300)
+    
+    return Response({
+        "status": "success",
+        "data": odds_data,
+        "total": len(odds_data)
+    })
+
 
 class MatchViewSet(viewsets.ModelViewSet):
     queryset = Match.objects.all().order_by('-match_date')
@@ -198,11 +318,34 @@ class LeagueOddsAPIView(APIView):
             "data": data if data else []
         })
 
+class AllMatchesView(generics.ListAPIView):
+    """
+    Returns ALL matches from the database.
+    This includes both external API matches and admin-created fixtures.
+    """
+    serializer_class = MatchListSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = Match.objects.all().order_by('-match_date')
+        
+        # ✅ Optional: filter by league
+        league_id = self.request.query_params.get('league')
+        if league_id:
+            queryset = queryset.filter(league_id=league_id)
+        
+        # ✅ Optional: filter by status
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        # ✅ Limit to 100 for performance
+        return queryset[:100]
+    
 class MatchResultsAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, sport_key='upcoming'):
-        # 1. Cache results for 30 minutes (Results are static once finished)
         cache_key = f"match_results_{sport_key}"
         cached_data = cache.get(cache_key)
 
@@ -213,25 +356,51 @@ class MatchResultsAPIView(APIView):
                 "source": "cache"
             })
 
-        # 2. Fetch scores from the API
+        # ✅ First, try to get results from your DATABASE
+        db_results = Match.objects.filter(
+            status__in=['finished', 'completed', 'FT']
+        ).order_by('-match_date')[:50]
+
+        if db_results.exists():
+            serializer = MatchListSerializer(db_results, many=True)
+            cache.set(cache_key, serializer.data, timeout=1800)
+            return Response({
+                "status": "success",
+                "data": serializer.data,
+                "source": "database"
+            })
+
+        # ✅ If no DB results, try external API
         raw_data = sports_api.get_live_scores(sport_key)
         
         if not raw_data:
-            return Response({"status": "success", "data": []})
+            return Response({
+                "status": "success",
+                "data": [],
+                "message": "No completed matches found"
+            })
 
-        # 3. Filter for matches that are "completed"
-        # The Odds API marks finished games as completed: true
-        results = [
-            match for match in raw_data 
-            if match.get('completed') == True
-        ]
+        # ✅ Filter for completed matches (handle different API response formats)
+        results = []
+        for match in raw_data:
+            # The Odds API uses 'completed' field
+            if match.get('completed') == True:
+                results.append(match)
+            # Some APIs use 'status' field
+            elif match.get('status') in ['FT', 'Finished', 'completed']:
+                results.append(match)
+            # Check if scores exist (indicates match is finished)
+            elif match.get('home_score') is not None and match.get('away_score') is not None:
+                results.append(match)
 
-        # 4. Store in cache
+        # Cache for 30 minutes
         cache.set(cache_key, results, timeout=1800)
 
         return Response({
             "status": "success",
-            "data": results
+            "data": results,
+            "source": "external_api",
+            "total": len(results)
         })
     
 class APIBackendHealthCheck(APIView):
